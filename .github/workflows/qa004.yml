@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   engine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,7 +24,7 @@ jobs:
             node "$test" /tmp/rogue-003b.html || exit 1
           done
   chromium-mobile:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
