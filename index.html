@@ -19,7 +19,7 @@ const ATTR=['Force','Dextérité','Constitution','Volonté','Intelligence','Perc
 const BASE={warrior:[4,2,4,2,1,2],rogue:[2,4,2,2,1,4],ranger:[2,4,2,3,1,4],mage:[1,2,2,4,4,2]};
 function migrate(){S.attrs??=[...BASE[S.classId]];S.ap??=0;S.ranks??=[1,1,1];S.bag??=[];S.equip??={weapon:null,armor:null,ring:null};S.serial??=0;S.spec??=null;S.nodes??={};S.activeTalents??={};S.veil??=0;S.shield??=0;S.bar??=[0,1,2];if(!Array.isArray(S.bar)||S.bar.length!==3||new Set(S.bar).size!==3||S.bar.some(i=>!Number.isInteger(i)||i<0||i>4||!unlocked(i)))S.bar=[0,1,2];while(S.cool.length<5)S.cool.push(0);while(S.ranks.length<5)S.ranks.push(1);S.equip.helmet??=null;S.equip.boots??=null;S.serial=Math.max(S.serial,...S.bag.map(i=>i.id||0),...Object.values(S.equip).map(i=>i?.id||0))}
 function bonus(k){return Object.values(S.equip).reduce((n,i)=>n+(i?.[k]||0),0)}
-function item(){let slot=['weapon','armor','ring','helmet','boots'][rand(5)],r=rand(100),tier=r<5?3:r<25?2:1;return {id:++S.serial,slot,name:['','Commun','Rare','Épique'][tier]+' · '+({weapon:'Arme',armor:'Armure',ring:'Anneau',helmet:'Casque',boots:'Bottes'}[slot]),atk:slot==='weapon'?tier:slot==='ring'?tier:0,def:slot==='armor'?tier:slot==='helmet'||slot==='boots'?Math.max(1,tier-1):0,crit:tier>1?rand(5)+1:0,regen:tier===3?1:0}}
+function item(forcedTier){let slot=['weapon','armor','ring','helmet','boots'][rand(5)],r=rand(100),tier=forcedTier??(r<5?3:r<25?2:1);return {id:++S.serial,slot,name:['','Commun','Rare','Épique'][tier]+' · '+({weapon:'Arme',armor:'Armure',ring:'Anneau',helmet:'Casque',boots:'Bottes'}[slot]),atk:slot==='weapon'?tier:slot==='ring'?tier:0,def:slot==='armor'?tier:slot==='helmet'||slot==='boots'?Math.max(1,tier-1):0,crit:tier>1?rand(5)+1:0,regen:tier===3?1:0}}
 function startMenu(){mode='start';const resume=!!localStorage.getItem(KEY);show('<h1>ROGUE <small>Android</small></h1><p>Roguelike tactique en pixel art. Mort permanente, exploration procédurale et commandes exclusivement au pavé à huit directions.</p>'+(resume?'<button class="wide" id="resume">Reprendre la partie</button>':'')+'<button class="wide" id="startopts">Options graphiques</button><h2>Nouvelle partie</h2><div class="classes">'+Object.entries(CLASSES).map(([k,c])=>`<button data-class="${k}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('')+'</div><p class="tiny">Une nouvelle partie remplace la sauvegarde précédente.</p>');document.getElementById('startopts').onclick=()=>options(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else{localStorage.removeItem(KEY);startMenu()}}}
 function newGame(id){let c=CLASSES[id];S={classId:id,x:0,y:0,hp:c.hp,maxHp:c.hp,res:c.maxRes,maxRes:c.maxRes,level:1,xp:0,points:0,floor:1,turn:0,bandages:3,atk:0,armor:0,guard:0,boost:0,cool:[0,0,0],kills:0,dead:false};migrate();selected=null;generate();mode='game';hide();say('Un nouveau destin commence.');update();save()}
 function buildDungeon(W,H,floor,seed){
@@ -218,7 +218,7 @@ function bossReward(m){
   const slot=m.boss==='stone'?'armor':m.boss==='ash'?'weapon':'ring';
   return {id:++S.serial,slot,name:({stone:'Cuirasse de Kharok',ash:'Lame de Syrha',veil:'Anneau de Veyl'})[m.boss],atk:slot==='weapon'?4:slot==='ring'?2:0,def:slot==='armor'?4:0,crit:slot==='ring'?6:0,regen:slot==='ring'?1:0,bossRelic:true};
 }
-function eliteReward(){const it=item();it.name='Rare · '+({weapon:'Arme',armor:'Armure',ring:'Anneau',helmet:'Casque',boots:'Bottes'})[it.slot];it.crit=Math.max(it.crit,3);return it}
+function eliteReward(){return item(2)}
 function kill(m){monsters=monsters.filter(x=>x!==m);S.kills++;gainXP(m.boss?24+S.floor: m.elite?12:4);if(m.boss)loot.unshift({x:m.x,y:m.y,kind:'gear',item:bossReward(m)});else if(m.affix)loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});else if(rand(5)===0)loot.push({x:m.x,y:m.y,kind:rand(3)===0?'gear':'bandage'});say(m.kind+' vaincu !')}
 function hit(m,damage){let d=Math.max(1,damage+S.atk+bonus('atk')+Math.floor(S.attrs[S.classId==='mage'?4:S.classId==='warrior'?0:1]/4)+(S.boost>0?3:0));if(S.spec==='offense')d+=2;if(m.exposed>0)d+=2;if(S.nodes.o1)d++;if(S.nodes.master)d+=2;if(rand(100)<Math.min(35,3+S.attrs[5]*2+bonus('crit')+(S.classId==='rogue'?5:0)+(S.nodes.o2?8:0)))d=Math.ceil(d*1.5);if(m.affix==='armored')d=Math.max(1,d-2);m.hp-=d;S.boost=0;say(m.kind+' : -'+d+' PV');if(m.hp<=0)kill(m)}
 function tacticalTurn(m,player,all,board,contacts){
@@ -287,7 +287,8 @@ function enemyPhase(){
     if(m.stun>0){m.stun--;delete m.aim;delete m.intent;continue}
     const special=bossAction(m,S,{W,H,stepOK});
     if(special){if(special.changed)say(m.kind+' entre en phase 2 !');if(special.type==='announce'){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.');continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power);else say(m.ability+' manque sa cible.');continue}}
-    const action=tacticalTurn(m,S,monsters,{W,H,stepOK},contacts);
+    const enemyStep=m.boss?(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y)):stepOK;
+    const action=tacticalTurn(m,S,monsters,{W,H,stepOK:enemyStep},contacts);
     if(action.type==='attack')enemyAttack(m,action.ranged);
     else if(action.type==='move'){m.x=action.x;m.y=action.y}
     else if(action.type==='aim'&&los(m.x,m.y))say(m.kind+' te vise ! Déplace-toi.');
