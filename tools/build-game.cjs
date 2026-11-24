@@ -15,6 +15,10 @@ function assemble(){
   let engine=include(read('src/game/engine.template.js'),
     '/* @include:dungeon */',read('src/game/dungeon.js'));
   engine=include(engine,'/* @include:geometry */',read('src/game/geometry.js'));
+  // Les fichiers sont assemblés à leur emplacement historique, sans import à l'exécution.
+  for(const id of ["persistence","weapons","talents","consumables","exploration","combat-formulas","items","history-transfer","title-screen","bestiary-bosses","economy","special-rooms","floor-exploration","object-art","biomes","tile-renderer","progression","combat-turns","hud","sprite-renderer","inventory-ui"]){
+    engine=include(engine,'/* @include:'+id+' */',read('src/game/'+id+'.js'));
+  }
   let html=read('src/index.template.html');
   html=include(html,'/* @include:styles */',read('src/styles/game.css'));
   html=include(html,'/* @include:engine */',engine);

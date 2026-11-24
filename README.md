@@ -18,3 +18,5 @@ Voir [la recette PWA](docs/GAME008C_PWA.md) pour construire et déployer le jeu.
 ## Sources modulaires (TECH-013A)
 
 Modifier les sources dans `src/`, puis régénérer le fichier autonome avec `node tools/build-game.cjs --write`. Vérifier sa synchronisation avec `node tools/build-game.cjs --check`. Voir [le guide d'assemblage](docs/TECH013A_SOURCE_LAYOUT.md).
+
+[Carte des systèmes extraits (TECH-013C-E)](docs/TECH013_SYSTEMS.md) : fichiers, dépendances et tests.
