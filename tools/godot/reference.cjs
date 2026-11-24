@@ -43,11 +43,11 @@ function createSession(html,seed){
   function element(id){
     if(!nodes.has(id)){
       const classes=new Set();
-      nodes.set(id,{...section(id),id,textContent:'',style:{setProperty(){}},
+      nodes.set(id,Object.assign(section(id),{id,textContent:'',style:{setProperty(){}},
         classList:{add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v),
           toggle(v,on){if(on===undefined)on=!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},
         getContext:()=>ctx,parentElement:{clientWidth:480,clientHeight:500},width:640,height:384,
-        addEventListener(){}});
+        addEventListener(){}}));
     }
     return nodes.get(id);
   }
