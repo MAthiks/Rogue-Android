@@ -1155,12 +1155,12 @@ function enemyArtId(m){
 }
 const ENEMY_ART_CACHE=new Map();
 function enemySprite(m){
- const id=enemyArtId(m),base=ENEMY_COLORS[id];
- if(ENEMY_ART_CACHE.has(id))return ENEMY_ART_CACHE.get(id);
+ const id=enemyArtId(m),rare=RARE_ENCOUNTERS.find(v=>v.id===m.rare),base=rare?.color||ENEMY_COLORS[id],key=rare?id+':'+rare.id:id;
+ if(ENEMY_ART_CACHE.has(key))return ENEMY_ART_CACHE.get(key);
  const palette={o:'#151820',H:base,h:tileTint(base,1.35),e:['boneguard','wraith','frostfang','icecaller','voidstalker','riftspawn'].includes(id)?'#bdf4f3':'#ffe0a3'};
  const ops=[];
  ENEMY_ART[id].forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+3,y+4,end-x,1]);x=end}});
- ENEMY_ART_CACHE.set(id,ops);return ops;
+ ENEMY_ART_CACHE.set(key,ops);return ops;
 }
 function drawEnemySprite(m,px,py){
  if(m.boss){ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}return}
