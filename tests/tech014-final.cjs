@@ -103,7 +103,9 @@ const inventoryCases=[];
  const d=fixture();d.S.bag.push(gear.createGear(++d.S.serial,10,1,generator(8,'lcg32').integer));
  const slot=d.S.bag[0].slot,commands=[{type:'inventory',kind:'equip',id:1},{type:'inventory',kind:'off',id:slot},{type:'inventory',kind:'drop',id:1},{type:'inventory',kind:'attr',id:2},{type:'inventory',kind:'spec',id:'offense'},{type:'inventory',kind:'node',id:0},{type:'inventory',kind:'learn',id:3},{type:'inventory',kind:'bar',id:2,value:3},{type:'inventory',kind:'rank',id:0},{type:'inventory',kind:'style',id:'defensive'}];
  const a=createSession(original,seed),b=createSession(html,seed);a.loadFixture(d);b.loadFixture(d);
- const steps=[];for(const c of commands){const expected=a.action(c);eq(b.action(c),expected);assert.equal(expected.S.turn,0);checks+=2;steps.push({command:c,state:expected})}
+ const independent=clone(a.snapshot().S);
+ const steps=[];for(const c of commands){const expected=a.action(c);eq(b.action(c),expected);assert.equal(expected.S.turn,0);assert.equal(domain.inventoryAction(independent,catalog,c),true);eq(independent,expected.S);checks+=4;steps.push({command:c,state:expected})}
+ for(const c of [{kind:'equip',id:9999},{kind:'off',id:'weapon'},{kind:'drop',id:9999},{kind:'spec',id:'defense'},{kind:'attr',id:-1},{kind:'node',id:0},{kind:'learn',id:3},{kind:'bar',id:9,value:0},{kind:'rank',id:4}]){const before=clone(independent);assert.equal(domain.inventoryAction(independent,catalog,c),false);eq(independent,before);checks+=2}
  assert.equal(steps[0].state.S.equip[slot].id,1);assert.equal(steps[1].state.S.bag[0].id,1);assert.equal(steps[2].state.S.bag.length,0);
  assert.equal(steps[3].state.S.maxHp,42);assert.equal(steps[4].state.S.spec,'offense');assert.equal(steps[5].state.S.nodes.o1,true);assert.equal(steps[6].state.S.activeTalents[3],true);assert.equal(steps[7].state.S.bar[2],3);assert.equal(steps[8].state.S.ranks[0],2);assert.equal(steps[9].state.S.combatStyle,'defensive');
  checks+=10;inventoryCases.push({run:d,seed,steps});
