@@ -158,7 +158,10 @@ jobs:
       - run: node tests/game008c-pwa.cjs
       - run: node tools/build-pwa.cjs pwa-dist
       - name: Package versioned PWA candidate
-        run: node tools/package-release.cjs pwa-dist release-preview
+        run: |
+          node tools/package-release.cjs pwa-dist release-preview
+          cd release-preview
+          sha256sum -c SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: cryptgrave-v1-pwa-candidate
