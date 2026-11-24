@@ -111,3 +111,23 @@ Le module `tools/godot/tactical-contract.cjs` isole les règles historiques de p
 Le port `transfer(catalogs)` conserve la validation de cryptgrave-transfer-v1 (limite 524288 unités UTF-16, profondeur 16, budget 40000 valeurs, positions et types, liste des classes/biomes, historique, options). Aucun accès au stockage ; le parseur traite le texte et renvoie un objet ou une erreur. Il ne rend pas le format plus strict que l'original et n'est pas une garantie d'intégrité cryptographique. L'écriture atomique, la reprise, la restauration après erreur et l'import utilisateur explicite restent des responsabilités de GODOT-004.
 
 `node tests/tech014-tactical.cjs tactical.json` compare aux sources du checkpoint les actions et mutations sur 12 cartes, sept rôles et huit boss, et teste les transferts valides/invalides des quatre classes. Les 42 scénarios tactiques et 21 cas de transfert exportables sont des entrées/sorties de référence, pas des campagnes victorieuses. Le fichier est joint à l'artefact de CI `cryptgrave-godot-reference`.
+
+## Addendum final — Commandes, interactions et campagnes longues
+
+`tools/godot/world-contract.cjs` compose les contrats de géométrie, combat, IA, talents, équipement et économie pour résoudre déplacements, ciblage, attaques, butin, interactions, consommables, événements, transactions marchandes et clôture de tour. L'état explicite conserve les identités des acteurs pendant un tour. Les ports requis sont rand, say, update, save, combatFx, generate et endRun. La génération complète de l'étage et la persistance terminale restent des ports, couverts par le moteur historique dans le banc ; leur implémentation Godot ne fait pas partie de TECH-014. La présentation ne doit jamais modifier le RNG ou l'ordre des tours.
+
+`reference.cjs` étend le banc aux commandes d'inventaire (équipement, retrait, suppression, attributs, rangs, talents, style, spécialisation, barre rapide), achats/ventes, consommation, attente et ciblage d'arme. Les callbacks historiques sont utilisés via un DOM minimal simulé ; ce n'est pas une validation des interactions physiques Android. Les fixtures synthétiques sont chargées uniquement dans les tests via loadFixture, après validation de leur format de transfert.
+
+`node tests/tech014-final.cjs final.json` compare les états et tirages après chaque commande sur les scénarios du monde, vérifie les transactions d'inventaire, la transition finale, la victoire et la suppression de la sauvegarde active, puis exécute une campagne longue par classe et rejoue chaque commande sur le checkpoint. Le pilote dispose d'un budget identique de 3200 commandes et connaît la carte. Il utilise les commandes réelles, sans modification artificielle des statistiques ni chargement de fixture pendant une campagne. Les victoires éventuelles sont des résultats déterministes pour les graines testées, pas une preuve d'équilibrage universel. Les scénarios de victoire contrôlés sont distincts des campagnes organiques.
+
+### Livrables à récupérer pour GODOT-001
+
+L'artefact `cryptgrave-godot-reference` de la CI doit contenir :
+- catalog.json : données de jeu ;
+- reference.json : plans et traces initiales ;
+- systems.json : géométrie, RNG, formules ;
+- domain.json : progression, équipements, économie, talents et migrations ;
+- tactical.json : IA, boss, créatures et validation des transferts ;
+- final.json : interactions, tours, inventaire, fins de partie et campagnes longues.
+
+Ne fusionner qu'après la réussite des quatre contrôles requis sur le dernier SHA. La recette Android physique et la publication de CRYPTGRAVE 1.0.0 restent distinctes, et aucune publication n'est autorisée dans ce chantier.
