@@ -46,7 +46,11 @@ function longCampaign(html,id,seed,budget=2500){
   const heal=p.bar.findIndex(i=>skill[i][3]==='heal'&&!p.cool[i]&&p.res>=skill[i][1]);
   const threats=enemies.flatMap(m=>m.intent?.cells||(m.aim?[m.aim]:[]));
   const same=(a,b)=>a.x===b.x&&a.y===b.y;
-  const dodge=threats.some(t=>same(t,p))&&dirs.find(([dx,dy])=>{const q={x:p.x+dx,y:p.y+dy};return !threats.some(t=>same(t,q))&&!d.monsters.some(t=>same(t,q))&&!d.features.some(f=>same(f,q)&&!f.spent)&&d.map[q.y*48+q.x]===0&&(!dx||!dy||(d.map[p.y*48+q.x]===0&&d.map[q.y*48+p.x]===0))});
+  const goal=target||d.stairs;
+  // Éviter une oscillation entre deux cases face aux archers : une esquive
+  // ordinaire doit aussi rapprocher du but ; les annonces de boss priment.
+  const bossThreat=enemies.some(m=>m.boss&&m.intent?.cells.some(t=>same(t,p)));
+  const dodge=threats.some(t=>same(t,p))&&dirs.filter(([dx,dy])=>{const q={x:p.x+dx,y:p.y+dy};return (bossThreat||dist(q,goal)<dist(p,goal))&&!threats.some(t=>same(t,q))&&!d.monsters.some(t=>same(t,q))&&!d.features.some(f=>same(f,q)&&!f.spent)&&d.map[q.y*48+q.x]===0&&(!dx||!dy||(d.map[p.y*48+q.x]===0&&d.map[q.y*48+p.x]===0))}).sort((a,b)=>dist({x:p.x+a[0],y:p.y+a[1]},goal)-dist({x:p.x+b[0],y:p.y+b[1]},goal))[0];
   if(d.selected!==null){
    cmd=target?{type:'move',dx:Math.sign(target.x-p.x),dy:Math.sign(target.y-p.y)}:{type:'wait'};
   }else if(dodge)cmd={type:'move',dx:dodge[0],dy:dodge[1]};
