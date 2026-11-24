@@ -284,6 +284,29 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/objects-open-mobile.png'});
     await loadObjects(changedFeatures,[...objectLoot,{x:32,y:15,kind:'bandage'}]);const hiddenLoot=await artPixels();
     await loadObjects(changedFeatures,objectLoot);assert.deepEqual(await artPixels(),hiddenLoot);
+    // GAME-007F: HUD values, skill icons, responsive touch geometry and cosmetic healing.
+    await page.setViewportSize({width:393,height:851});
+    const uiFixture=JSON.parse(JSON.stringify(objectFixture));uiFixture.S.hp=5;uiFixture.S.maxHp=40;uiFixture.S.bandages=3;uiFixture.monsters=[];uiFixture.features=[];uiFixture.terrain=[];uiFixture.loot=[];
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('ui-art')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('ui-art','1')}},{key,data:uiFixture});
+    await page.reload();assert.equal(await page.locator('[data-class] .class-icon').count(),4);await page.locator('#resume').tap();
+    assert.equal(await page.locator('#hudMeters [role="progressbar"]').count(),3);
+    assert.equal(await page.locator('.meter-hp [role="progressbar"]').getAttribute('aria-valuenow'),'5');
+    assert.equal(await page.locator('[data-skill] .skill-icon').count(),3);
+    const uiBefore=await read();await page.locator('#bandage').tap();
+    const uiAfter=await read();assert.ok(uiAfter.S.hp>uiBefore.S.hp);assert.equal(uiAfter.S.turn,uiBefore.S.turn+1);
+    assert.equal(await page.locator('#combatFx .fx-heal').count(),1);
+    assert.equal(await page.locator('.meter-hp [role="progressbar"]').getAttribute('aria-valuenow'),String(uiAfter.S.hp));
+    assert.equal(await page.locator('#combatFx').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-heal-mobile.png'});
+    await page.reload();await page.locator('#resume').tap();assert.equal(await page.locator('#combatFx .fx-chip').count(),0);assert.deepEqual(await read(),uiAfter);
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('#game').evaluate(c=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('[data-d]').count(),8);
+      assert.ok(await page.locator('[data-d], #wait, #inventory, #menu, [data-skill]').evaluateAll(a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=25&&r.height>=25&&r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})));
+      assert.ok(await page.locator('#game').evaluate(c=>{const r=c.getBoundingClientRect();return r.width>0&&r.height>0}));
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-'+width+'x'+height+'.png'});
+    }
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
