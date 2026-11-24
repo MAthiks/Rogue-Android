@@ -1214,7 +1214,15 @@ const OBJECT_ART={
  library:['oooooooooo','ohHhHhHhHo','ohHhHhHhHo','oooooooooo','oHhHhHhHho','oHhHhHhHho','oooooooooo','oHhHhHhHho','oHhHhHhHho','oooooooooo'],
  vault:['.oooooooo.','oHhHHHHhHo','oHhHHHHhHo','oHhHeeHhHo','oHhHeeHhHo','oHhHHHHhHo','oHhHHHHhHo','.oooooooo.','..........','..........'],
  cursed:['o........o','oh......ho','.oH....Ho.','..oHeeHo..','..oHeeHo..','.oHHHHHHo.','..oHHHHo..','.oHHHHHHo.','oooooooooo','..........'],
- hidden:['...oooo...','..ohhhHo..','.oHeeeeHo.','.oHHHHHHo.','.oHHeeHHo.','.oHHHHHHo.','..oHHHHo..','..oooooo..','..........','..........']
+ hidden:['...oooo...','..ohhhHo..','.oHeeeeHo.','.oHHHHHHo.','.oHHeeHHo.','.oHHHHHHo.','..oHHHHo..','..oooooo..','..........','..........'],
+ forge:["..........","..o....o..","..oe..eo..",".oHeeeHHo.",".oHHHHHHo.","..oHHHHo..","...oHHo...","..ohhhho..",".oHHHHHHo.","oooooooooo"],
+ ossuary:["..oooooo..",".ohhhhhho.","ohohhhohho","ohohhhohho","ohhhHhhhho",".ohHHHho..","..oHoHo...","..ooooo...",".oHHHHHHo.","oooooooooo"],
+ mirror:["...oooo...","..ohehho..",".oheeehho.",".oheehhho.",".ohheehho.",".ohhhheho.","..ohhhho..","...oHHo...","..oHHHHo..","..oooooo.."],
+ caravan:["..........",".oooooooo.",".ohhhHhho.","oHHHHHHHHo","oeHHHHHHeo","oHHHHHHHHo",".oooooooo.","..oo..oo..",".ohhoohho.","..oo..oo.."],
+ reliquary:["....oo....","...oeeo...","..oeeHHo..",".oeeHhHHo.",".oHHhHHHo.","..oHheHo..","...oHHo...","..ohhhho..",".oHHHHHHo.","oooooooooo"],
+ shrineTrial:["..o....o..",".oeo..oeo.","..o.oo.o..","..ohehho..",".oHHHHHHo.",".oHeeHHHo.",".oHHHHHHo.","..oHHHHo..",".ohhhhhho.","oooooooooo"],
+ hiddenArchive:["oooooooooo","ohHoHHoHho","oHHoHHoHHo","oooooooooo","ohHoHHoHho","oHHoHHoHHo","oooooooooo","ohhHhhHhho","oHHHHHHHHo","oooooooooo"],
+ hiddenTreasury:["..........","...oooo...","..oheeho..",".oHHHHHHo.","oooooooooo","oHeHHHHeHo","oHHeeeHHHo","oHHHeHHHHo","oHHHHHHHHo","oooooooooo"]
 };
 const OBJECT_ART_CACHE=new Map(),OBJECT_CACHE_LIMIT=256;
 function objectSprite(id,color,visible=true,spent=false){
@@ -1240,8 +1248,8 @@ function featureArt(f){
  if(f.type==='chest')return [f.open?'chestOpen':'chest','#c18b47',false];
  if(f.type==='trap')return [f.spent?'trapSpent':'trap','#cf7965',!!f.spent];
  if(f.type==='merchant')return [f.merchantId,MERCHANTS[f.merchantId]?.color||'#bba67c',false];
- if(f.type==='event')return [{forge:'obelisk',ossuary:'shrine',mirror:'fountain',caravan:'cache',reliquary:'shrine'}[f.eventId]||f.eventId,EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9',!!f.spent];
- if(f.type==='specialRoom')return [{shrineTrial:'sanctuary',hiddenArchive:'library',hiddenTreasury:'vault'}[f.roomId]||f.roomId,SPECIAL_ROOMS[f.roomId]?.color||'#d2c5a1',!!f.spent];
+ if(f.type==='event')return [f.eventId,EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9',!!f.spent];
+ if(f.type==='specialRoom')return [f.roomId,SPECIAL_ROOMS[f.roomId]?.color||'#d2c5a1',!!f.spent];
  return null;
 }
 function drawObject(id,color,px,py,visible=true,spent=false){
