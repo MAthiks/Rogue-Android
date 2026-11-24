@@ -64,6 +64,21 @@ public class OfflineGameTest {
             js(s,"document.getElementById('resume').click(); true");
             assertEquals(next,js(s,"JSON.parse(localStorage.getItem('"+key+"')).S.turn"));
             assertEquals("true",js(s,"document.querySelector('canvas').getBoundingClientRect().width>0"));
+            // GAME-011C5/C6: native bundled shell has no active PWA worker.
+            assertEquals("true",js(s,"!document.querySelector('link[rel=manifest]') && (!navigator.serviceWorker || !navigator.serviceWorker.controller)"));
+            String raw = js(s,"localStorage.getItem('"+key+"')");
+            for(int cycle=0;cycle<3;cycle++){
+                s.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);
+                s.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);
+                assertEquals(raw,js(s,"localStorage.getItem('"+key+"')"));
+                s.recreate();ready(s);
+                assertEquals("true",js(s,"!!document.getElementById('resume')"));
+                js(s,"document.getElementById('resume').click(); true");
+                assertEquals(raw,js(s,"localStorage.getItem('"+key+"')"));
+                assertEquals("true",js(s,"location.origin==='https://appassets.androidplatform.net'"));
+                android.util.Log.i("CRYPTGRAVE-QA","Lifecycle cycle "+cycle+" app-process PSS KiB: "+android.os.Debug.getPss());
+            }
+
         }
     }
 }
