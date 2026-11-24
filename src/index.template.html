@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#11151c">
+<title>CRYPTGRAVE — Android</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><style>/* @include:styles */</style>
+</head>
+<body>
+<div id="app">
+<header>
+<div class="hud-top"><div class="hud-identity"><span id="hudClass" aria-hidden="true"></span><strong>CRYPTGRAVE <span id="biomeName" style="color:#c9baa1">Les profondeurs</span></strong></div><span id="stats">Android · tour par tour</span></div>
+<div id="hudMeters"></div>
+</header>
+<main>
+<canvas id="game" width="640" height="384" aria-label="Carte du donjon"></canvas>
+<div id="combatFx" aria-hidden="true"></div>
+</main>
+<footer>
+<div class="pad" id="pad"><button data-d="-1,-1" aria-label="Nord-ouest">↖</button><button data-d="0,-1" aria-label="Nord">↑</button><button data-d="1,-1" aria-label="Nord-est">↗</button><button data-d="-1,0" aria-label="Ouest">←</button><button id="wait" aria-label="Attendre et fouiller">●</button><button data-d="1,0" aria-label="Est">→</button><button data-d="-1,1" aria-label="Sud-ouest">↙</button><button data-d="0,1" aria-label="Sud">↓</button><button data-d="1,1" aria-label="Sud-est">↘</button></div>
+<div class="right">
+<div id="log" aria-live="polite" aria-label="Journal de combat">Choisis une classe.</div>
+<div class="skills"><button data-skill="0">Talent 1</button><button data-skill="1">Talent 2</button><button data-skill="2">Talent 3</button></div>
+<div class="tools"><button id="weaponAction" disabled>Arme</button><button id="bandage">Bandage</button><button id="inventory">Équipement</button><button id="consumables">Objets</button><button id="menu">Menu</button></div>
+<div class="tiny">8 directions · ● attendre/fouiller · soins limités/étage</div></div>
+</footer>
+</div>
+<div id="overlay">
+<div class="panel" id="panel"></div></div>
+<script>/* @include:engine */</script><script>/* @include:pwa */</script></body></html>

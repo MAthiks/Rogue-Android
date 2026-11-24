@@ -13,3 +13,8 @@ Voir [la recette PWA](docs/GAME008C_PWA.md) pour construire et déployer le jeu.
 ## Documentation du code
 
 [Guide de lecture du moteur (TECH-012)](docs/TECH012_CODE_GUIDE.md) : architecture, glossaire et conventions de programmation.
+
+
+## Sources modulaires (TECH-013A)
+
+Modifier les sources dans `src/`, puis régénérer le fichier autonome avec `node tools/build-game.cjs --write`. Vérifier sa synchronisation avec `node tools/build-game.cjs --check`. Voir [le guide d'assemblage](docs/TECH013A_SOURCE_LAYOUT.md).
