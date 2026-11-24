@@ -5,13 +5,13 @@ Statut : préparation, **pas de publication v1.0**. Version candidate Android 0.
 ## Références figées
 - Main PWA : 8b2b31afe95384fcb40612b4a144ad2ecf3aad22, PR #29 fusionnée.
 - PWA validée : 439aba907d8a2495803e69a8070a466b10fa5c31, QA-004 run 45310732419, engine/Chromium/PWA 3/3. Artefact 14883746413.
-- APK candidat PR #30 : 4a3ec1baa4a3a3634b42a80f52ae4b993af87325, run Android 45311720674. Compilation et contrôle signature/permissions/payload réussis ; émulateur en cours au moment de la rédaction. Ne pas déclarer validé sans résultat final et artefact.
+- APK candidat PR #30 : 4a3ec1baa4a3a3634b42a80f52ae4b993af87325, run Android 45311720674. Compilation, signature, permissions, payload et émulateur Android 13 réussis. QA-004 45311720495 réussi (3/3), Android APK 45311720674 réussi (1/1). Artefact debug 14882719142. PR #30 fusionnée dans main e8f7796d2a30aec0901d90a02f2b46ae630220ba ; arbre identique à la branche validée.
 - Aucun changement de moteur, stockage ou contenu du jeu dans GAME-008E (documentation uniquement).
 
 ## Porte 1 — Android
 - Vérifier SHA final, CI QA-004 engine/Chromium/PWA, Android APK et son artefact.
 - Comparer la branche PWA avec main, puis retarget PR #30 vers main si les arbres restent équivalents. Vérifier les contrôles après retarget avant fusion.
-- Tester sur téléphone avec [GAME008D_ANDROID.md](GAME008D_ANDROID.md), A01–A08. APK debug pour une partie de test uniquement. Conserver l'artefact et le SHA256.
+- Le 24/11/2026, l'utilisateur confirme les sept contrôles physiques sur son smartphone : lancement, quatre classes, huit directions, combats et inventaire, rotation, reprise après fermeture, mode avion. Cette recette est acquise pour la version 0.9.0 debug, sans présumer de contrôles supplémentaires A01–A08 non explicitement confirmés. Conserver l'artefact et le SHA256. La recette d'une mise à jour signée production reste à effectuer.
 - Ne pas désinstaller une application contenant des sauvegardes pour résoudre un conflit de signature.
 
 ## Porte 2 — navigateur
@@ -28,8 +28,8 @@ Statut : préparation, **pas de publication v1.0**. Version candidate Android 0.
 
 ## Fiche de recette à renseigner
 - Date / modèle Android / version OS / WebView :
-- SHA APK / SHA256 / résultat A01–A08 :
+- APK candidat : artefact 14882719142, SHA branche 4a3ec1baa4a3a3634b42a80f52ae4b993af87325. Sept contrôles physiques confirmés le 24/11/2026 ; SHA256 du fichier à relever lors de la recette de distribution.
 - URL PWA / SHA déployé / résultat recette PWA :
-- Résultat des CI et lien :
+- CI de la branche candidate : https://github.com/MAthiks/Rogue-Android/actions/runs/45311720495 et https://github.com/MAthiks/Rogue-Android/actions/runs/45311720674 (4/4). CI main post-fusion à contrôler séparément.
 - Anomalies et décisions :
-- Validation finale utilisateur :
+- Validation utilisateur : recette physique APK 0.9.0 confirmée ; publication v1.0 non encore autorisée.
