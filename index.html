@@ -1478,6 +1478,7 @@ const OBJECT_ART={
  hiddenTreasury:["..........","...oooo...","..oheeho..",".oHHHHHHo.","oooooooooo","oHeHHHHeHo","oHHeeeHHHo","oHHHeHHHHo","oHHHHHHHHo","oooooooooo"]
 };
 const OBJECT_ART_CACHE=new Map(),OBJECT_CACHE_LIMIT=256;
+/* TECH-012C — Produit les rectangles d'un objet selon son type, sa couleur et son état ; les variantes sont mises en cache. */
 function objectSprite(id,color,visible=true,spent=false){
  id=Object.hasOwn(OBJECT_ART,id)?id:'gear';
  color=/^#[0-9a-f]{6}$/i.test(color||'')?color:'#a6b8ba';
@@ -1486,15 +1487,18 @@ function objectSprite(id,color,visible=true,spent=false){
  const tint=visible?1:.48;
  const palette={o:tileTint('#22202a',tint),H:tileTint(base,tint),h:tileTint(base,1.3*tint),e:tileTint(spent?'#858990':'#ffe7ae',tint)};
  const ops=[];OBJECT_ART[id].forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+3,y+3,end-x,1]);x=end}});
+ /* TECH-012C — Évite la croissance illimitée du cache en retirant la première entrée lorsque la limite est atteinte. */
  if(OBJECT_ART_CACHE.size>=OBJECT_CACHE_LIMIT)OBJECT_ART_CACHE.delete(OBJECT_ART_CACHE.keys().next().value);
  OBJECT_ART_CACHE.set(key,ops);return ops;
 }
+/* TECH-012C — Associe le butin à une silhouette et une couleur de rareté ou de catégorie. */
 function lootArt(l){
  if(l.kind==='bandage')return ['bandage','#d5c7a4'];
  if(l.kind==='consumable'){const v=CONSUMABLES[l.consumable];return [v?.type==='Potion'?'potion':v?.type==='Parchemin'?'scroll':l.consumable==='smoke'?'smoke':l.consumable==='toolkit'?'toolkit':'gear',v?.color||'#a6b8ba']}
  const it=l.item;if(!it)return ['gear','#85b8d5'];
  return [it.slot==='weapon'?weaponFamily(it)||'blade':Object.hasOwn(OBJECT_ART,it.slot)?it.slot:'gear',RARITIES[rarityOf(it)-1].color];
 }
+/* TECH-012C — Retourne le dessin approprié à un élément découvert, y compris ses états ouvert ou utilisé. */
 function featureArt(f){
  if(!f||!f.found)return null;
  if(f.type==='door'||f.type==='secret')return [f.open?'doorOpen':f.type,'#a58150',false];
@@ -1508,6 +1512,7 @@ function featureArt(f){
 function drawObject(id,color,px,py,visible=true,spent=false){
  for(const [c,x,y,w,h] of objectSprite(id,color,visible,spent)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
+/* TECH-012C — Convertit les mêmes opérations de dessin du donjon en SVG pour l'inventaire. */
 function objectIcon(id,color){
  return '<svg aria-hidden="true" viewBox="0 0 16 16" width="24" height="24" style="vertical-align:middle;shape-rendering:crispEdges;margin-right:5px">'+objectSprite(id,color).map(([c,x,y,w,h])=>'<rect fill="'+c+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"/>').join('')+'</svg>';
 }
@@ -1585,17 +1590,21 @@ function enterTerrain(x,y){
 }
 // GAME-007A: 16x16 procedural pixel tiles; purely visual, no RNG or save mutations.
 const TILE_ART_CACHE=new Map();
+/* TECH-012C — Multiplie les trois composantes RGB et les borne pour produire une variation de luminosité. */
 function tileTint(hex,mul){
  const n=parseInt(hex.slice(1),16);
  return '#'+[n>>16&255,n>>8&255,n&255].map(v=>Math.max(0,Math.min(255,Math.round(v*mul))).toString(16).padStart(2,'0')).join('');
 }
+/* TECH-012C — Calcule une variante stable à partir des coordonnées, sans consommer de tirage aléatoire de gameplay. */
 function tileVariant(x,y){let n=(Math.imul(x+1,73856093)^Math.imul(y+1,19349663))>>>0;n=Math.imul(n^(n>>>16),0x7feb352d);return (n^(n>>>15))&3}
+/* TECH-012C — Encode les frontières nord, est, sud et ouest sur quatre bits, seulement si le voisin est découvert. */
 function knownTileEdges(x,y,wall,grid,memory,w,h){
  let mask=0;for(const [dx,dy,bit] of [[0,-1,1],[1,0,2],[0,1,4],[-1,0,8]]){
    const nx=x+dx,ny=y+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;
    const k=ny*w+nx;if(memory[k]&&(grid[k]===1)!==wall)mask|=bit;
  }return mask;
 }
+/* TECH-012C — Construit les rectangles d'une case selon le biome, le brouillard, le motif et les frontières connues. */
 function tileArt(b,wall,visible,variant,edges){
  const i=visible?0:1,v=variant&3,e=edges&15,key=[b.motif,wall?1:0,i,v,e].join(':');
  if(TILE_ART_CACHE.has(key))return TILE_ART_CACHE.get(key);
@@ -1643,6 +1652,7 @@ function tileArt(b,wall,visible,variant,edges){
 // Keep the original rect path for environments without a Canvas image API.
 let tileAtlas=null,tileAtlasCtx=null,tileAtlasBiome=null;
 const tileAtlasReady=new Uint8Array(256);
+/* TECH-012C — Dessine une case à partir de l'atlas Canvas calculé à la demande ; conserve un rendu par rectangles comme solution de repli. */
 function drawBiomeTile(b,x,y,wall,visible,px,py){
  const variant=tileVariant(x,y),edges=knownTileEdges(x,y,wall,map,seen,W,H);
  if(typeof ctx.drawImage==='function'&&typeof document.createElement==='function'){
@@ -1651,7 +1661,9 @@ function drawBiomeTile(b,x,y,wall,visible,px,py){
      tileAtlasCtx=tileAtlas.getContext('2d');
    }
    if(tileAtlasCtx){
+     /* TECH-012C — Invalide les cases préparées lors d'un changement de biome. */
      if(tileAtlasBiome!==b){tileAtlasBiome=b;tileAtlasReady.fill(0)}
+     /* TECH-012C — Les 256 cases de l'atlas couvrent les combinaisons mur/sol, visible/mémorisé, quatre variantes et seize masques de bord. */
      const slot=(wall?128:0)+(visible?0:64)+variant*16+edges;
      const ax=(slot%16)*T,ay=Math.floor(slot/16)*T;
      if(!tileAtlasReady[slot]){
@@ -2279,33 +2291,74 @@ const SKILL_ART={
  mage:[[28,12,24,62,12,24,16],[8,28,62,127,62,28,8],[62,65,93,85,93,65,62],[73,42,28,127,28,42,73],[28,62,107,127,62,28,8]]
 };
 const SKILL_COLORS={warrior:'#c9d8dd',rogue:'#b5c990',ranger:'#e4c18a',mage:'#cbb4ef'};
+/* TECH-012C — Construit une icône SVG de 7 × 7 pixels à partir de masques binaires ; chaque bit actif correspond à un pixel. */
 function skillIcon(id,index){
  const rows=SKILL_ART[id]?.[index];if(!rows)return '';
  let pixels='';rows.forEach((row,y)=>{for(let x=0;x<7;x++)if(row&(1<<(6-x)))pixels+='<rect x="'+x+'" y="'+y+'" width="1" height="1" fill="'+SKILL_COLORS[id]+'"/>'});
  return '<svg aria-hidden="true" class="skill-icon" viewBox="0 0 7 7">'+pixels+'</svg>';
 }
+/* TECH-012C — Réutilise le sprite de classe pour produire une icône SVG sans équipement. */
 function classIcon(id){return '<svg aria-hidden="true" class="class-icon" viewBox="0 0 16 16">'+playerSprite(id).map(([c,x,y,w,h])=>'<rect fill="'+c+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"/>').join('')+'</svg>'}
+/* TECH-012C — Transforme une valeur en pourcentage entier borné entre 0 et 100 ; protège contre les valeurs non finies et les divisions par zéro. */
 function meterPercent(value,max){return Number.isFinite(value)&&Number.isFinite(max)&&max>0?Math.max(0,Math.min(100,Math.round(100*value/max))):0}
+/* TECH-012C — Prépare les trois jauges du personnage : vie, ressource de classe et expérience ; le niveau maximal affiche MAX. */
 function hudData(s){return [{id:'hp',label:'PV',value:s.hp,max:s.maxHp},{id:'res',label:CLASSES[s.classId].res,value:s.res,max:s.maxRes},{id:'xp',label:'XP',value:s.level>=30?1:s.xp,max:s.level>=30?1:8+s.level*6,cap:s.level>=30}]}
 // GAME-011C4: retain identical HUD markup; no changes to input or turn scheduling.
+/* TECH-012C — Mémorise le dernier contenu HTML par élément DOM pour éviter des reconstructions identiques. */
 const hudMarkup=new WeakMap();
-function setHudMarkup(el,html){if(hudMarkup.get(el)!==html){el.innerHTML=html;hudMarkup.set(el,html)}}
+/* TECH-012C — Ne remplace le contenu d'un élément que si son HTML a changé. */
+function setHudMarkup(el,html){
+  if(hudMarkup.get(el)!==html){
+    el.innerHTML=html;
+    hudMarkup.set(el,html)
+  }
+}
+/* TECH-012C — Actualise l'emblème de classe et les jauges accessibles sans modifier l'état du moteur. */
 function updateHud(){
- const el=document.getElementById('hudMeters'),crest=document.getElementById('hudClass');if(!S){setHudMarkup(el,'');setHudMarkup(crest,'');return}setHudMarkup(crest,classIcon(S.classId));
+ const el=document.getElementById('hudMeters'),crest=document.getElementById('hudClass');
+ if(!S){
+  setHudMarkup(el,'');
+  setHudMarkup(crest,'');
+  return
+ }
+ setHudMarkup(crest,classIcon(S.classId));
  setHudMarkup(el,hudData(S).map(m=>'<div class="hud-meter meter-'+m.id+'"><div class="meter-label"><span>'+m.label+'</span><span>'+(m.cap?'MAX':m.value+'/'+m.max)+'</span></div><div class="meter-track" role="progressbar" aria-label="'+m.label+'" aria-valuemin="0" aria-valuemax="'+m.max+'" aria-valuenow="'+Math.max(0,Math.min(m.max,m.value))+'"><span class="meter-fill" style="width:'+meterPercent(m.value,m.max)+'%"></span></div></div>').join(''));
 }
 const FX_LABELS={hit:'Frappe',critical:'Critique',hurt:'Dégâts',heal:'Soin',guard:'Protection'};
 function clearCombatFx(){document.getElementById('combatFx').innerHTML=''}
-function combatFx(kind,amount){if(!Object.hasOwn(FX_LABELS,kind)||!S||mode!=='game')return;const el=document.getElementById('combatFx'),n=Number.isFinite(amount)?Math.max(0,Math.round(amount)):null;el.innerHTML='<div class="fx-chip fx-'+kind+'">'+FX_LABELS[kind]+(n===null?'':(kind==='heal'?' +':' −')+n)+'</div>'}
+/* TECH-012C — Affiche le retour visuel d'une action de combat ; le CSS pilote l'animation, sans consommer de tour. */
+function combatFx(kind,amount){
+  if(!Object.hasOwn(FX_LABELS,kind)||!S||mode!=='game')return;
+  const el=document.getElementById('combatFx'),n=Number.isFinite(amount)?Math.max(0,Math.round(amount)):null;
+  el.innerHTML='<div class="fx-chip fx-'+kind+'">'+FX_LABELS[kind]+(n===null?'':(kind==='heal'?' +':' −')+n)+'</div>'
+}
 /* TECH-012C — Synchronise les informations affichées, les commandes disponibles et le rendu avec l'état courant du personnage. */
-function update(){if(!S)return;updateHud();document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;weaponButton.classList.toggle('active',selected==='weapon');document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';document.querySelectorAll('[data-skill]').forEach(b=>{let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];setHudMarkup(b,skillIcon(S.classId,i)+'<span class="skill-caption">'+s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]+' t':'')+'</span><small class="skill-cost">Coût '+s[1]+'</small>');b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());b.classList.toggle('active',selected===i)});render()}
+function update(){
+  if(!S)return;
+  updateHud();
+  document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;
+  const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();
+  weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';
+  weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;
+  weaponButton.classList.toggle('active',selected==='weapon');
+  document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';
+  document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';
+  document.querySelectorAll('[data-skill]').forEach(b=>{
+    let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];setHudMarkup(b,skillIcon(S.classId,i)+'<span class="skill-caption">'+s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]+' t':'')+'</span><small class="skill-cost">Coût '+s[1]+'</small>');
+    b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());
+    b.classList.toggle('active',selected===i)
+  });
+  render()
+}
 // GAME-007B: native 16px silhouettes; gear layers are purely cosmetic.
+/* TECH-012C — Chaque classe possède une palette et une silhouette codée ligne par ligne ; le point représente un pixel transparent. */
 const PLAYER_ART={
  warrior:{palette:['#263747','#506c7c','#9dbbc3','#d7e4da','#c39a69'],rows:['...oooo...','..oHHHHo..','..oHhHHo..','..oFffFo..','...offo...','ooHooooHoo','oHHhHhHHHo','oHhHHHHhHo','oohHHHHhoo','..oBbbBo..','..oHHHHo..','..oHooHo..','..oHo.oHo.','..ooo.ooo.']},
  rogue:{palette:['#282b2c','#55594d','#8e9b70','#c4cba0','#bf926b'],rows:['....oo....','...oHHo...','..oHHHHo..','..oHffHo..','...offo...','..oHHHoo..','.oHhHHHHo.','.oHhHHhHo.','..oHHHHo..','..oBbbBo..','.oHHHHHHo.','.oHooHHHo.','..oHo.oHo.','..ooo.ooo.']},
  ranger:{palette:['#30392b','#57704a','#8aa66c','#cbd59a','#c3a06e'],rows:['...oooo...','..oHHHHo..','.oHHhHHHo.','.oHffffHo.','..ooffoo..','..oHHHHo.o','.oHHhHHooo','.oHhHHHoHo','.oHHHHHoHo','..oBbbBooo','..oHHHHo..','..oHooHo..','..oHo.oHo.','..ooo.ooo.']},
  mage:{palette:['#332b4b','#66517f','#a18bbc','#d6c5ed','#c8a47d'],rows:['....o.....','...oHo....','...oHHo...','..oHHHHo..','.ooHHHHoo.','..oFffFo..','...offo...','..oHhHHo..','.oHHhHHHo.','.oHHbHHHo.','.oHhHHHHo.','oHHhHHHHHo','oHHhHHhHHo','oooooooooo']}
 };
+/* TECH-012C — Compose une silhouette de 16 × 16 pixels et ajoute les couches cosmétiques de l'équipement ; retourne des opérations de dessin. */
 function playerSprite(classId,equip={}){
  const art=Object.hasOwn(PLAYER_ART,classId)?PLAYER_ART[classId]:PLAYER_ART.warrior;
  const [dark,mid,light,shine,skin]=art.palette,outline='#141922';
@@ -2319,6 +2372,7 @@ function playerSprite(classId,equip={}){
  if(equip.helmet){const c=tone(equip.helmet);rect(c,6,3,4);rect(c,5,4);rect(c,10,4)}
  if(equip.boots){const c=tone(equip.boots);rect(c,5,13,2);rect(c,9,13,2);rect(dark,5,14,2);rect(dark,9,14,2)}
  if(equip.ring){rect(outline,3,9,2,2);rect(tone(equip.ring),4,9)}
+ /* TECH-012C — La famille de l'arme détermine la silhouette ; la rareté fournit une couleur cosmétique. */
  const weapon=equip.weapon;
  if(weapon){
    const c=tone(weapon),metal='#d7dedb',wood='#a57a51';
@@ -2333,6 +2387,7 @@ function playerSprite(classId,equip={}){
      default:rect(outline,13,2,2,9);rect(c,13,2,1,8);rect(metal,13,3,1,5);rect(wood,12,10,3);rect(dark,13,11,1,3);
    }
  }
+ /* TECH-012C — Regroupe les pixels contigus de même couleur en rectangles horizontaux pour réduire les appels de dessin. */
  const ops=[];
  for(let y=0;y<16;y++)for(let x=0;x<16;){const c=pixels[y][x];let end=x+1;while(end<16&&pixels[y][end]===c)end++;if(c)ops.push([c,x,y,end-x,1]);x=end}
  return ops;
@@ -2368,10 +2423,13 @@ const ENEMY_ART={
 };
 const ENEMY_COLORS={guardian:'#e6ad65',brute:'#c87961',wanderer:'#bd777d',archer:'#91ab6e',ambusher:'#9282bb',coward:'#c0b58a',tracker:'#75b0b7'};
 for(const entries of Object.values(BESTIARY))for(const [id,,color] of entries)ENEMY_COLORS[id]=color;
+/* TECH-012C — Sélectionne d'abord le dessin de l'espèce, puis celui du rôle, avec un errant comme solution de repli. */
 function enemyArtId(m){
  return Object.hasOwn(ENEMY_ART,m.species)?m.species:Object.hasOwn(ENEMY_ART,m.role)?m.role:'wanderer';
 }
+/* TECH-012C — Réutilise les opérations graphiques des ennemis par espèce ou variante rare. */
 const ENEMY_ART_CACHE=new Map();
+/* TECH-012C — Convertit les lignes de pixels en rectangles colorés et met en cache le résultat. */
 function enemySprite(m){
  const id=enemyArtId(m),rare=RARE_ENCOUNTERS.find(v=>v.id===m.rare),base=rare?.color||ENEMY_COLORS[id],key=rare?id+':'+rare.id:id;
  if(ENEMY_ART_CACHE.has(key))return ENEMY_ART_CACHE.get(key);
@@ -2392,6 +2450,7 @@ const BOSS_ART={
  abyssal:{color:'#9268ad',glow:'#eca7ff',rows:['o..........o','oHo..oo..oHo','.oHooHHooHo.','oHHHHeeHHHHo','oHhHHhhHHhHo','.oHHoeeoHHo.','oHoHHhhHHoHo','o..oHHHHo..o','..oHo..oHo..','.ooo....ooo.']}
 };
 const BOSS_ART_CACHE=new Map();
+/* TECH-012C — La phase du boss change les accents lumineux du sprite ; les règles de combat restent indépendantes de ce rendu. */
 function bossSprite(m){
  const id=Object.hasOwn(BOSS_ART,m.boss)?m.boss:'stone',a=BOSS_ART[id];
  const maxPhase=Object.hasOwn(EXTENDED_BOSSES,id)?3:2;
@@ -2408,11 +2467,13 @@ function bossSprite(m){
 function drawBossSprite(m,px,py){
  for(const [c,x,y,w,h] of bossSprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
+/* TECH-012C — Dessine un boss ou un ennemi ordinaire à la position écran indiquée. */
 function drawEnemySprite(m,px,py){
  if(m.boss){drawBossSprite(m,px,py);return}
  for(const [c,x,y,w,h] of enemySprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
 // Frame-local indexes preserve the first matching entity and never survive a map mutation.
+/* TECH-012C — Indexe les entités par case pour cette image uniquement et conserve la première entité rencontrée. */
 function renderCellIndex(items){
  const cells=new Map();
  for(const item of items)if(Number.isInteger(item.x)&&Number.isInteger(item.y)&&inside(item.x,item.y)){
@@ -2421,12 +2482,69 @@ function renderCellIndex(items){
  return cells;
 }
 /* TECH-012A — Dessine le voisinage du joueur dans le canvas à partir des cases connues. Les index de terrain et de features accélèrent la recherche des éléments par case. */
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);
+function render(){
+  if(!S)return;
+  const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,
+        ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);
+ /* TECH-012C — Construit les index temporaires du terrain, des éléments et des menaces avant le parcours de la zone visible. */
  const terrainCells=renderCellIndex(terrain),featureCells=renderCellIndex(features),intentCells=new Set();
  for(const m of monsters)if(m.intent)for(const p of m.intent.cells)if(Number.isInteger(p.x)&&Number.isInteger(p.y)&&inside(p.x,p.y))intentCells.add(idx(p.x,p.y));
  ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);
  for(let vy=Math.max(0,-oy);vy<Math.min(VIEWH,H-oy);vy++)for(let vx=Math.max(0,-ox);vx<Math.min(VIEWW,W-ox);vx++){
- let x=vx+ox,y=vy+oy,i=idx(x,y);if(!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrainCells.get(i),px,py,visible);drawFeature(featureCells.get(i),px,py,visible);if(visible&&intentCells.has(i)){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){drawObject('stairs','#d4b46f',px,py)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;const [id,color]=lootArt(l);drawObject(id,color,px,py)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+  let x=vx+ox,y=vy+oy,i=idx(x,y);
+  /* TECH-012C — Le brouillard de guerre masque les cases jamais découvertes ; les cases connues mais hors ligne de vue restent dessinées avec une teinte sombre. */
+  if(!seen[i])continue;
+  let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;
+  drawBiomeTile(biome,x,y,wall,visible,px,py);
+  drawTerrain(terrainCells.get(i),px,py,visible);
+  drawFeature(featureCells.get(i),px,py,visible);
+  if(visible&&intentCells.has(i)){
+    ctx.fillStyle='#813d3d';
+    ctx.fillRect(px+1,py+1,14,14);
+    ctx.strokeStyle='#ff9274';
+    ctx.strokeRect(px+1,py+1,14,14)
+  }
+  if(visible&&x===stairs.x&&y===stairs.y){
+    drawObject('stairs','#d4b46f',px,py)
+  }
+ }
+ /* TECH-012C — Le butin et les ennemis ne sont affichés que lorsqu'ils sont actuellement visibles. */
+ for(const l of loot){
+  if(!los(l.x,l.y))continue;
+  let px=(l.x-ox)*T,py=(l.y-oy)*T;
+  const [id,color]=lootArt(l);
+  drawObject(id,color,px,py)
+ }
+ for(const m of monsters){
+  if(!los(m.x,m.y))continue;
+  let px=(m.x-ox)*T,py=(m.y-oy)*T;
+  drawEnemySprite(m,px,py);
+  drawCreatureMark(m,px,py);
+  drawBossPhase(m,px,py);
+  if(m.boss||m.rare){
+    ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';
+    ctx.strokeRect(px,py,16,16)
+  }
+  if(!m.boss&&(m.role==='guardian'||m.elite)){
+    ctx.fillStyle='#f1cd7b';
+    ctx.fillRect(px+4,py+3,8,2)
+  }
+  if(m.aim){
+    ctx.strokeStyle='#f2c979';
+    ctx.strokeRect(px+1,py+1,14,14)
+  }
+  ctx.fillStyle='#3d2529';
+  ctx.fillRect(px+2,py+1,12,2);
+  ctx.fillStyle='#dfb17a';
+  ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)
+ }
+ let px=(S.x-ox)*T,py=(S.y-oy)*T;
+ drawPlayerSprite(px,py);
+ if(selected!==null){
+  ctx.strokeStyle='#f2c979';
+  ctx.strokeRect(px+1,py+1,14,14)
+ }
+}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
