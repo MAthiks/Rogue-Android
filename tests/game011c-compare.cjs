@@ -7,7 +7,7 @@ for(const key of ['browser','node','platform','arch'])assert.equal(a[key],b[key]
 assert.equal(a.profiles.length,b.profiles.length);
 const rows=a.profiles.map((x,i)=>{
  const y=b.profiles[i],label=x.width+'x'+x.height;
- for(const key of ['width','height','canvas','visibilitySha256','sceneHashes','saveSha256','turns','saveBytes','pageErrors'])assert.deepEqual(y[key],x[key],label+' '+key);
+ for(const key of ['width','height','canvas','visibilitySha256','sceneHashes','saveSha256','longTurns','longSaveSha256','turns','saveBytes','pageErrors'])assert.deepEqual(y[key],x[key],label+' '+key);
  const metrics={};
  for(const name of ['render','reveal','update','save','pointerToNextFrame','stress100Turns']){
   const before=(x.functions[name]||x[name]).mean,after=(y.functions[name]||y[name]).mean;
