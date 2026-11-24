@@ -124,11 +124,30 @@ function stats(values){
    assert.deepEqual(errors,[]);
    const raw=await page.evaluate(()=>localStorage.getItem('rogue-android-game002-v1'));
    assert.equal(JSON.parse(raw).S.turn,624);
+   // C6: independent long-run checkpoints after the comparable 624-turn sample.
+   const memoryTrend=[];
+   for(let batch=0;batch<6;batch++){
+     await page.evaluate(()=>window.__perf011c.stress(200));await settle();
+     const turn=await page.evaluate(()=>window.__perf011c.turn());
+     assert.equal(turn,624+200*(batch+1));
+     memoryTrend.push({turn,...await heap()});
+   }
+   const longRaw=await page.evaluate(()=>localStorage.getItem('rogue-android-game002-v1'));
+   assert.equal(JSON.parse(longRaw).S.turn,1824);
+   for(let cycle=0;cycle<3;cycle++){
+     await page.reload();await page.locator('#resume').tap();
+     await page.setViewportSize({width:height,height:width});await settle();
+     await page.setViewportSize({width,height});await settle();
+     assert.equal(await page.evaluate(()=>localStorage.getItem('rogue-android-game002-v1')),longRaw);
+   }
+   const memoryAfterReload=await heap();
+   assert.deepEqual(errors,[]);
    const scenes=await page.evaluate(()=>window.__perf011c.scenes());
    assert.ok(scenes.every(s=>s.pure),'scene render purity');
    const sceneHashes=scenes.map(({visibility,...scene})=>({...scene,visibilitySha256:crypto.createHash('sha256').update(visibility).digest('hex')}));
    report.profiles.push({width,height,canvas:profile.pixels,visibilitySha256,cacheEntries:profile.cacheEntries,
     saveSha256:crypto.createHash('sha256').update(raw).digest('hex'),sceneHashes,
+    longTurns:1824,longSaveSha256:crypto.createHash('sha256').update(longRaw).digest('hex'),memoryTrend,memoryAfterReload,
     functions:Object.fromEntries(Object.entries(profile.samples).map(([k,v])=>[k,stats(v)])),
     pointerToNextFrame:stats(input.samples),stress100Turns:stats(stress),turns:624,memoryBefore,memoryAfter,
     saveBytes:Buffer.byteLength(raw),pageErrors:errors});
