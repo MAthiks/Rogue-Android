@@ -187,6 +187,7 @@ const ADV={warrior:[['Brise-garde',5,5,'direction'],['Bastion',5,8,'guard']],rog
 function applyPrefs(){const small=innerHeight<=430;document.documentElement.style.setProperty('--padw',Math.round((small?42:46)*prefs.pad/100)+'px');document.documentElement.style.setProperty('--padh',Math.round((small?38:43)*prefs.pad/100)+'px');try{localStorage.setItem(PREF,JSON.stringify(prefs))}catch(e){};resizeMap()}
 /* TECH-012A — Dimensionne le canvas par cases entières à partir de l'espace disponible et du zoom. Ne réalloue le canvas que si sa taille change, pour limiter le coût du rendu. */
 function resizeMap(){const m=canvas.parentElement;const w=Math.max(16,m.clientWidth-6),h=Math.max(16,m.clientHeight-6);const scale= Math.max(1,Math.floor(Math.min(w/40,h/24)/16*16));const tile=Math.max(1,Math.round(scale*prefs.zoom/100));const cw=Math.max(1,Math.floor(w/tile))*T,ch=Math.max(1,Math.floor(h/tile))*T;if(canvas.width!==cw)canvas.width=cw;if(canvas.height!==ch)canvas.height=ch;const sw=(cw/T*tile)+'px',sh=(ch/T*tile)+'px';if(canvas.style.width!==sw)canvas.style.width=sw;if(canvas.style.height!==sh)canvas.style.height=sh;render()}
+/* TECH-012C — Présente le zoom, la taille du pavé et le plein écran ; le rappel back retourne à l'écran précédent. */
 function options(back){show(`<h1>Options graphiques</h1><label for="zoom">Zoom du donjon</label><select id="zoom">${[75,100,125,150,200].map(n=>`<option value="${n}" ${prefs.zoom===n?'selected':''}>${n}%</option>`).join('')}</select><label for="padsize">Taille du pavé</label><select id="padsize">${[85,100,115].map(n=>`<option value="${n}" ${prefs.pad===n?'selected':''}>${n}%</option>`).join('')}</select><button class="wide" id="full">Basculer plein écran</button><p id="fullstatus" aria-live="polite"></p><button class="wide" id="defaults">Réglages par défaut</button><button class="wide" id="optback">Retour</button>`);document.getElementById('zoom').onchange=e=>{prefs.zoom=+e.target.value;applyPrefs()};document.getElementById('padsize').onchange=e=>{prefs.pad=+e.target.value;applyPrefs()};document.getElementById('defaults').onclick=()=>{prefs={zoom:100,pad:100};applyPrefs();options(back)};document.getElementById('full').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(e){document.getElementById('fullstatus').textContent='Plein écran indisponible dans ce navigateur.'}};document.getElementById('optback').onclick=back}
 /* TECH-012C — État partagé du moteur : S contient le personnage et sa progression ; map, seen, monsters, loot, stairs, features et terrain décrivent l'étage. selected désigne le ciblage en attente ; mode distingue le menu et la partie. */
 let S=null,map=[],seen=[],monsters=[],loot=[],stairs=null,features=[],terrain=[],selected=null,mode='start',messages=[];
@@ -739,8 +740,11 @@ function setSummary(){
 }
 // GAME-006F: local hall of fame; independent from the active run save.
 const HISTORY_KEY='rogue-android-history-v1',FINAL_FLOOR=30,HISTORY_LIMIT=50;
+/* TECH-012C — Normalise les compteurs de l'historique en entiers positifs ou nuls, bornés à un milliard. */
 function historyNumber(v){return Number.isFinite(v)?Math.max(0,Math.min(1000000000,Math.floor(v))):0}
+/* TECH-012C — Crée un historique vide au format version 1, avec un compteur de victoires par classe. */
 function emptyHistory(){return {version:1,runs:[],total:0,wins:0,deaths:0,abandoned:0,bestScore:0,bestFloor:0,bestKills:0,fastestWin:null,classWins:{warrior:0,rogue:0,ranger:0,mage:0},challenges:[]}}
+/* TECH-012C — Reconstruit un historique exploitable depuis le stockage local ; les données illisibles ne bloquent pas le jeu. */
 function readHistory(){
  const h=emptyHistory();
  try{
@@ -753,6 +757,7 @@ function readHistory(){
  }catch(e){}
  return h;
 }
+/* TECH-012C — Calcule le score final et compte les reliques de boss distinctes dans le sac et l'équipement. */
 function runSummary(outcome){
  const floor=historyNumber(S.floor),level=historyNumber(S.level),kills=historyNumber(S.kills),turns=historyNumber(S.turn),gold=goldBalance(),relics=new Set([...S.bag,...Object.values(S.equip)].filter(it=>it?.bossRelic&&it.uniqueId).map(it=>it.uniqueId)).size;
  const score=Math.min(1000000000,floor*100+level*50+kills*10+relics*100+gold+(outcome==='victory'?2000:0));
@@ -760,7 +765,10 @@ function runSummary(outcome){
 }
 /* TECH-012A — Ajoute le bilan au journal des parties, limite la liste récente et actualise les statistiques cumulées et les défis débloqués. */
 function recordRun(r){
- const h=readHistory();h.runs.unshift(r);h.runs=h.runs.slice(0,HISTORY_LIMIT);h.total++;
+ const h=readHistory();
+ h.runs.unshift(r);
+ h.runs=h.runs.slice(0,HISTORY_LIMIT);
+ h.total++;
  if(r.outcome==='victory'){h.wins++;h.classWins[r.classId]++;h.fastestWin=h.fastestWin===null?r.turns:Math.min(h.fastestWin,r.turns)}
  else if(r.outcome==='death')h.deaths++;else h.abandoned++;
  h.bestScore=Math.max(h.bestScore,r.score);h.bestFloor=Math.max(h.bestFloor,r.floor);h.bestKills=Math.max(h.bestKills,r.kills);
@@ -770,6 +778,7 @@ function recordRun(r){
 }
 function outcomeLabel(outcome){return outcome==='victory'?'Victoire':outcome==='death'?'Mort permanente':'Abandon'}
 function summaryMarkup(r){return '<p>'+CLASSES[r.classId].name+' · Niveau '+r.level+' · Étage '+r.floor+'</p><p><b>Score : '+r.score+'</b> · '+r.kills+' ennemis vaincus · '+r.turns+' tours<br>Or : '+r.gold+' · Reliques distinctes : '+r.relics+'</p>'}
+/* TECH-012C — Affiche les records, défis et parties récentes ; le rappel back détermine l'écran de retour. */
 function historyMenu(back=startMenu){
  const h=readHistory(),challenges=[['first-win','Première victoire','Terminer le donjon'],['swift','Course contre le temps','Gagner en 2 000 tours maximum'],['collector','Collectionneur','Terminer avec 3 reliques de boss distinctes'],['all-classes','Maître des quatre classes','Gagner avec chaque classe']];
  show('<h1>Panthéon des aventuriers</h1><p>Parties : '+h.total+' · Victoires : '+h.wins+' · Morts : '+h.deaths+' · Abandons : '+h.abandoned+'</p><p>Meilleur score : '+h.bestScore+' · Étage record : '+h.bestFloor+' · Ennemis record : '+h.bestKills+'<br>Victoire la plus rapide : '+(h.fastestWin===null?'—':h.fastestWin+' tours')+'</p><h2>Défis</h2>'+challenges.map(([id,name,desc])=>'<p><b>'+(h.challenges.includes(id)?'✓ ':'○ ')+name+'</b><br><small>'+desc+'</small></p>').join('')+'<h2>Victoires par classe</h2>'+Object.keys(CLASSES).map(k=>'<p>'+CLASSES[k].name+' : '+h.classWins[k]+'</p>').join('')+'<h2>Dernières parties (50 max.)</h2>'+(h.runs.map(r=>'<h3>'+outcomeLabel(r.outcome)+'</h3>'+summaryMarkup(r)).join('')||'<p>Aucune partie terminée.</p>')+'<button class="wide" id="historyBack">Retour</button>');
@@ -779,31 +788,42 @@ function historyMenu(back=startMenu){
 function endRun(outcome){
  if(!S||S.ended||!['victory','death','abandoned'].includes(outcome))return false;
  if(outcome==='victory'&&(S.dead||S.hp<=0||S.floor<FINAL_FLOOR||S.x!==stairs.x||S.y!==stairs.y||monsters.some(m=>m.boss&&m.hp>0)||loot.some(l=>l.x===stairs.x&&l.y===stairs.y)))return false;
- const r=runSummary(outcome);S.ended=outcome;if(outcome==='death')S.dead=true;mode=outcome==='death'?'dead':'ended';selected=null;
+ const r=runSummary(outcome);
+ S.ended=outcome;
+ if(outcome==='death')S.dead=true;
+ mode=outcome==='death'?'dead':'ended';
+ selected=null;
  const saved=recordRun(r);try{localStorage.removeItem(KEY)}catch(e){}
  const result=()=>{show('<h1>'+outcomeLabel(outcome)+'</h1>'+(outcome==='victory'?'<p>Le dernier gardien est tombé. Tu quittes le donjon victorieux.</p>':'')+summaryMarkup(r)+'<p>'+(saved?'Bilan enregistré sur cet appareil.':'Historique indisponible.')+'</p><button class="wide" id="endHistory">Panthéon et records</button><button class="wide" id="again">Nouvelle partie</button>');document.getElementById('endHistory').onclick=()=>historyMenu(result);document.getElementById('again').onclick=startMenu};
  result();return true;
 }
 
 /* GAME-008E3: explicit, portable local transfer; no automatic checkpoints. */
+/* TECH-012C — Limite la taille du texte importé à 524 288 unités de chaîne et identifie le format de transfert versionné. */
 const TRANSFER_LIMIT=524288,TRANSFER_FORMAT='cryptgrave-transfer-v1';
 const transferObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
 const transferInt=(v,min=0,max=1000000000)=>Number.isInteger(v)&&v>=min&&v<=max;
 function transferAssert(ok){if(!ok)throw Error('Sauvegarde incompatible ou invalide.')}
+/* TECH-012C — Contrôle récursivement les types, la profondeur, le nombre de valeurs, les longueurs et les noms de propriétés avant la validation métier. */
 function transferTree(v,depth=0,budget={n:0}){
  transferAssert(depth<=16&&++budget.n<=40000);
  if(v===null||typeof v==='boolean')return;
  if(typeof v==='number'){transferAssert(Number.isFinite(v)&&Math.abs(v)<=4294967296);return}
  if(typeof v==='string'){transferAssert(v.length<=256&&!/[<>&"`\\\u0000-\u001f]/.test(v));return}
  if(Array.isArray(v)){transferAssert(v.length<=4096);for(const x of v)transferTree(x,depth+1,budget);return}
- transferAssert(transferObject(v));const keys=Object.keys(v);transferAssert(keys.length<=128);
+ transferAssert(transferObject(v));
+ const keys=Object.keys(v);
+ transferAssert(keys.length<=128);
  for(const k of keys){transferAssert(/^[a-zA-Z0-9_-]{1,80}$/.test(k)&&!['__proto__','prototype','constructor'].includes(k));transferTree(v[k],depth+1,budget)}
 }
+/* TECH-012C — Vérifie qu'une position possède des coordonnées entières dans les limites de la grille. */
 function transferPoint(p){return transferObject(p)&&transferInt(p.x,0,W-1)&&transferInt(p.y,0,H-1)}
+/* TECH-012C — Contrôle les champs de base d'un équipement importé et ses statistiques numériques éventuelles. */
 function transferGear(it){
  transferAssert(transferObject(it)&&transferInt(it.id,1)&&['weapon','armor','helmet','boots','ring'].includes(it.slot)&&typeof it.name==='string');
  for(const k of ['atk','def','crit','regen','dodge','itemLevel','rarity'])if(it[k]!==undefined)transferAssert(transferInt(it[k],0,1000000));
 }
+/* TECH-012C — Contrôle la structure d'une partie importée : personnage vivant, progression, inventaire, dimensions, positions et entités. */
 function validateTransferRun(d){
  if(d===null)return;
  transferAssert(transferObject(d)&&transferObject(d.S));const s=d.S;
@@ -822,6 +842,7 @@ function validateTransferRun(d){
  for(const p of [...d.features,...d.terrain])transferAssert(typeof p.type==='string');
  if(s.dungeon!==undefined)transferAssert(transferObject(s.dungeon)&&Object.hasOwn(BIOMES,s.dungeon.biome));
 }
+/* TECH-012C — Contrôle le format de l'historique importé, les compteurs, les classes, les résultats et les défis. */
 function validateTransferHistory(h){
  if(h===null)return;
  transferAssert(transferObject(h)&&h.version===1&&Array.isArray(h.runs)&&h.runs.length<=HISTORY_LIMIT&&transferObject(h.classWins)&&Array.isArray(h.challenges)&&h.challenges.length<=4);
@@ -832,15 +853,20 @@ function validateTransferHistory(h){
 }
 /* TECH-012A — Valide le format, la structure et les préférences d'un paquet de transfert avant son utilisation. Une donnée invalide provoque une erreur plutôt qu'une restauration partielle. */
 function parseTransfer(text){
- transferAssert(typeof text==='string'&&text.length>0&&text.length<=TRANSFER_LIMIT);const b=JSON.parse(text);transferTree(b);
+ transferAssert(typeof text==='string'&&text.length>0&&text.length<=TRANSFER_LIMIT);
+ const b=JSON.parse(text);
+ transferTree(b);
  transferAssert(transferObject(b)&&b.format===TRANSFER_FORMAT&&Object.keys(b).length===4);
- validateTransferRun(b.run);validateTransferHistory(b.history);
+ validateTransferRun(b.run);
+ validateTransferHistory(b.history);
  transferAssert(transferObject(b.prefs)&&Object.keys(b.prefs).length===2&&[75,100,125,150,200].includes(b.prefs.zoom)&&[85,100,115].includes(b.prefs.pad));return b;
 }
+/* TECH-012C — Assemble la partie active, l'historique et les options dans un paquet JSON validé avant export. */
 function exportTransfer(){
  const raw=localStorage.getItem(KEY),h=localStorage.getItem(HISTORY_KEY);
  const data=JSON.stringify({format:TRANSFER_FORMAT,run:raw===null?null:JSON.parse(raw),history:h===null?null:readHistory(),prefs:{zoom:prefs.zoom,pad:prefs.pad}});
- parseTransfer(data);return data;
+ parseTransfer(data);
+ return data;
 }
 /* TECH-012C — Autorise l'import uniquement au menu principal. Valide le paquet avant l'écriture et tente de restaurer les anciennes données si le stockage échoue. */
 function importTransfer(text){
@@ -849,8 +875,12 @@ function importTransfer(text){
  try{for(const [k,v] of entries){if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}}
  catch(e){let restored=true;for(const [k,v] of old)try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(err){restored=false}throw Error(restored?'Import impossible : données précédentes conservées.':'Stockage indisponible : vérifie tes données avant de continuer.')}
  // Do not let the previous in-memory run overwrite the imported state on visibilitychange.
- S=null;selected=null;prefs={...b.prefs};return b;
+ S=null;
+ selected=null;
+ prefs={...b.prefs};
+ return b;
 }
+/* TECH-012C — Permet de copier ou coller un paquet de transfert ; l'import demande confirmation avant le remplacement des données locales. */
 function transferMenu(){
  if(mode!=='start')return;
  show('<h1>Transfert de sauvegarde</h1><p>Copie le texte dans un fichier privé, puis colle-le sur le nouvel appareil. Un import remplace la partie, les records et les options. Un ancien export peut revenir à un état antérieur : à réserver aux migrations, pas aux reprises après une mort.</p><textarea id="transferData" aria-label="Texte de transfert" spellcheck="false" style="width:100%;height:140px;resize:vertical;background:#101318;color:#eee5d4;border:1px solid #514534"></textarea><button class="wide" id="transferExport">Exporter et sélectionner</button><button class="wide" id="transferImport">Importer le texte</button><p id="transferStatus" aria-live="polite"></p><button class="wide" id="transferBack">Retour</button>');
@@ -868,18 +898,23 @@ const CLASS_CARD_ART={
  ranger:{tone:'#b8ba81',bg:'#303b32',role:'La vigie',shape:'<path fill="#58664a" d="M13 65L18 44 34 37 48 44 52 65Z"/><path fill="#788360" d="M20 41L17 26 24 12 35 8 47 17 49 32 43 44Z"/><path fill="#30382f" d="M24 26L34 19 44 26 43 36 35 43 26 36Z"/><path fill="#bca17d" d="M27 26H41V34L34 40 27 34Z"/><path fill="#594637" d="M28 29H31V31H28Z M37 29H40V31H37Z"/><path fill="#94734d" d="M20 45L45 64H39L18 50Z"/><path fill="none" stroke="#c49e61" stroke-width="3" d="M55 12Q40 33 55 59"/><path fill="none" stroke="#d5cbb0" d="M55 12L55 59"/><path fill="#a9ab9b" d="M38 39L59 34 61 36 39 41Z"/><path fill="#d4d8cb" d="M56 31L64 34 57 39Z"/>'},
  mage:{tone:'#beadd9',bg:'#3b304b',role:'L’érudit',shape:'<path fill="#51446e" d="M9 65L16 42 34 37 51 42 59 65Z"/><path fill="#81709d" d="M20 40L17 27 23 14 34 8 45 14 51 28 46 42 34 49Z"/><path fill="#332a46" d="M24 28L34 18 44 28 42 36 34 43 26 36Z"/><path fill="#c3a68d" d="M28 27H40V35H28Z"/><path fill="#d4c7e7" d="M29 28H32V30H29Z M36 28H39V30H36Z"/><path fill="#c8c1bc" d="M28 35H40L42 43 34 53 26 43Z"/><path fill="#b6a36d" d="M19 45L34 61 49 45 46 43 34 54 22 43Z"/><path fill="#a58c64" d="M55 24H58V65H55Z"/><path fill="#bdabe7" d="M56 7L62 15 58 24H53L49 15Z"/><path fill="#e0d4ff" d="M56 10L59 15 55 20 53 15Z"/>'}
 };
+/* TECH-012C — Construit le portrait SVG original d'une classe pour le menu et la fiche du personnage. */
 function classCardPortrait(id){
  const a=CLASS_CARD_ART[id];
  return '<svg class="class-portrait" viewBox="0 0 68 68" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="'+a.bg+'" d="M0 0H68V68H0Z"/><path fill="#17171d" opacity=".5" d="M4 65V31Q4 10 34 4Q64 10 64 31V65Z"/><path fill="none" stroke="'+a.tone+'" opacity=".45" d="M4 65V31Q4 10 34 4Q64 10 64 31V65Z"/><circle cx="34" cy="26" r="20" fill="'+a.tone+'" opacity=".11"/>'+a.shape+'</svg>';
 }
+/* TECH-012C — Assemble le bouton de sélection avec portrait, rôle, caractéristiques initiales et spécialisations. */
 function classCard(id,c){
  const a=CLASS_CARD_ART[id];
  return '<button class="crypt-class-card class-'+id+'" data-class="'+id+'">'+classCardPortrait(id)+'<span class="crypt-class-head">'+classIcon(id)+'<b>'+c.name+'</b></span><span class="crypt-class-role">'+a.role+'</span><small>'+c.desc+'</small><span class="crypt-class-stats"><span class="crypt-class-hp">PV '+c.hp+'</span><span>'+c.res+' '+c.maxRes+'</span></span><span class="crypt-class-spec">'+SPECS[id].join(' · ')+'</span></button>';
 }
 
 // GAME-011A: a failed resume must never silently erase or overwrite the original save.
+/* TECH-012C — Présente les données brutes d'une sauvegarde illisible pour permettre une copie de secours sans les effacer. */
 function recoveryMenu(){
- mode='start';S=null;selected=null;
+ mode='start';
+ S=null;
+ selected=null;
  show('<h1>Sauvegarde illisible</h1><p>La partie n’a pas pu être reprise. Les données originales sont conservées. Copie-les dans un fichier privé avant toute nouvelle partie ou import.</p><textarea id="recoveryData" aria-label="Données brutes de la sauvegarde" readonly spellcheck="false" style="width:100%;height:140px;background:#101318;color:#eee5d4;border:1px solid #514534"></textarea><p id="recoveryStatus" aria-live="polite"></p><button class="wide" id="recoveryCopy">Sélectionner les données</button><button class="wide" id="recoveryBack">Retour au menu</button>');
  const field=document.getElementById('recoveryData'),status=document.getElementById('recoveryStatus'),copy=document.getElementById('recoveryCopy');
  try{field.value=localStorage.getItem(KEY)??'';copy.disabled=!field.value;status.textContent=field.value?'Copie brute de secours, non importable directement via Transfert.':'Aucune donnée disponible.'}catch(e){field.value='';copy.disabled=true;status.textContent='Stockage indisponible. Ne supprime pas les données de l’application.'}
@@ -2550,6 +2585,7 @@ const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],r
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
 
 // GAME-009C: read-only dossier presentation; all values come from live state.
+/* TECH-012C — Construit la synthèse du personnage à partir de ses statistiques actuelles, sans attribuer de bonus. */
 function characterDossier(){
  const c=CLASSES[S.classId],spec=S.spec?SPECS[S.classId][S.spec==='offense'?0:1]:'Sans spécialisation';
  const sprite='<svg class="sheet-sprite" viewBox="0 0 16 16" aria-hidden="true">'+playerSprite(S.classId,S.equip).map(([color,x,y,w,h])=>'<rect fill="'+color+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"/>').join('')+'</svg>';
@@ -2557,9 +2593,11 @@ function characterDossier(){
  const values=[['Attaque (bonus)','+'+(S.atk+bonus('atk'))],['Défense (bonus)','+'+(S.armor+bonus('def'))],['Critique',criticalChance()+'%'],['Esquive',dodgeChance()+'%'],['Régénération',resourceRegen(false)+'/t'],['Éliminations',S.kills]];
  return '<section class="crypt-sheet"><p class="sheet-kicker">CRYPTGRAVE · CHRONIQUE DU PERSONNAGE</p><div class="sheet-top"><div class="sheet-art">'+classCardPortrait(S.classId)+sprite+'</div><div><h1>'+c.name+'</h1><p class="sheet-spec">'+spec+'</p>'+(S.spec?'<p class="tiny">'+doctrineDescription(S.classId,S.spec)+'</p>':'')+'<div class="sheet-meta"><span>Niveau '+S.level+'</span><span>Étage '+S.floor+'</span><span class="sheet-gold">Or '+goldBalance()+'</span></div><div class="sheet-meters">'+meters+'</div></div></div><div class="sheet-combat">'+values.map(([label,value])=>'<div><b>'+value+'</b><span>'+label+'</span></div>').join('')+'</div></section>';
 }
+/* TECH-012C — Affiche une caractéristique et indique si un point peut être investi. */
 function characterAttributeCard(name,i){
  return '<button data-attr="'+i+'" '+(!S.ap?'disabled':'')+'><span class="sheet-attr-name">'+name+'</span><span class="sheet-attr-value">'+S.attrs[i]+'</span><small>'+ATTRHELP[i]+'</small><span class="sheet-attr-up">'+(S.ap?'Investir +1':'Aucun point')+'</span></button>';
 }
+/* TECH-012C — Affiche le rang d'une compétence et désactive son amélioration si les conditions ne sont pas remplies. */
 function characterRankCard(a,i){
  const rank=S.ranks[i],locked=!unlocked(i),disabled=locked||!S.points||rank>=5||S.level<rank*2;
  return '<button class="wide" data-rank="'+i+'" '+(disabled?'disabled':'')+'>'+skillIcon(S.classId,i)+'<span class="sheet-rank-text">'+a[0]+'<small>'+(locked?'Compétence verrouillée':rank>=5?'Rang maximum':'Niveau requis : '+rank*2)+'</small></span><span><span class="sheet-rank-text">'+(locked?'—':rank+'/5')+'</span><span class="sheet-rank-dots" aria-hidden="true">'+Array.from({length:5},(_,j)=>'<i class="'+(!locked&&j<rank?'filled':'')+'"></i>').join('')+'</span></span></button>';
@@ -2570,24 +2608,70 @@ function characterRankCard(a,i){
 function equipmentSprite(){
  return '<svg viewBox="0 0 16 16" aria-hidden="true" class="equipment-sprite">'+playerSprite(S.classId,S.equip).map(([c,x,y,w,h])=>'<rect fill="'+c+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"/>').join('')+'</svg>';
 }
+/* TECH-012C — Affiche un emplacement équipé ou vide ; le retrait est indisponible lorsque le sac est plein. */
 function equipmentSlotCard(slot){
  const it=S.equip[slot],label=GEAR_SLOTS[slot],rarity=it?RARITIES[rarityOf(it)-1]:null,tone=rarity?.color||'#8d8271';
  const disabled=!it||S.bag.length>=24;
  return '<button class="gear-slot gear-slot-'+slot+(it?'':' empty')+'" data-off="'+slot+'" style="--gear-tone:'+tone+'" '+(disabled?'disabled':'')+'><span class="slot-label">'+label+'</span>'+objectIcon(...(it?lootArt({kind:'gear',item:it}):[slot==='weapon'?'blade':slot,tone]))+'<span class="slot-name">'+(it?escapeGear(it.name):'Vide')+'</span><small>'+(it?(disabled?'Sac plein':rarity.name+' · Retirer'):'Non équipé')+'</small></button>';
 }
+/* TECH-012C — Compose la silhouette équipée et les détails des cinq emplacements. */
 function equipmentRack(){
  return '<div class="crypt-gear"><div class="gear-rack">'+['helmet','ring','weapon','armor','boots'].map(equipmentSlotCard).join('')+'<div class="gear-hero">'+equipmentSprite()+'</div></div><div class="gear-equipped-details">'+Object.entries(S.equip).filter(([k,it])=>it).map(([k,it])=>'<div class="gear-equipped-line"><span>'+GEAR_SLOTS[k]+'</span><div><span style="color:'+RARITIES[rarityOf(it)-1].color+'">'+escapeGear(it.name)+'</span><small class="gear-detail">'+gearStats(it)+(weaponFamily(it)?' · '+WEAPONS[weaponFamily(it)].desc:'')+(it.itemLevel?' · Niv. objet '+it.itemLevel:'')+(GEAR_SETS[it.setId]?' · '+GEAR_SETS[it.setId].name+' ('+setCount(S.equip,it.setId)+'/3)':it.uniqueId||it.bossRelic?' · Unique':'')+'</small></div></div>').join('')+'</div></div>';
 }
+/* TECH-012C — Présente un objet du sac avec ses statistiques, sa rareté et les actions d'équipement ou de suppression. */
 function bagItemCard(it){
  const rarity=RARITIES[rarityOf(it)-1],set=GEAR_SETS[it.setId];
  return '<div class="gear-row"><button class="wide gear-item" data-equip="'+it.id+'" style="--gear-tone:'+rarity.color+'">'+objectIcon(...lootArt({kind:'gear',item:it}))+'<span><span class="gear-item-name">'+escapeGear(it.name)+'</span><small class="gear-detail">'+rarity.name+' · '+GEAR_SLOTS[it.slot]+(it.itemLevel?' · Niv. objet '+it.itemLevel:'')+' · '+gearStats(it)+(weaponFamily(it)?' · '+WEAPONS[weaponFamily(it)].desc:'')+(set?' · Ensemble '+set.name+' ('+setCount(S.equip,it.setId)+'/3)':it.uniqueId||it.bossRelic?' · Unique':'')+'</small><span class="gear-action">'+(S.equip[it.slot]?'Remplacer':'Équiper')+'</span></span></button><button class="wide" data-drop="'+it.id+'">Jeter</button></div>';
 }
+/* TECH-012C — Affiche la capacité du sac et la liste des objets ; ne modifie pas l'inventaire. */
 function bagCards(){
  return '<div class="crypt-bag"><div class="bag-capacity"><span>Emplacements occupés</span><b>'+S.bag.length+'/24</b></div><div class="bag-capacity-track" role="progressbar" aria-label="Capacité du sac" aria-valuemin="0" aria-valuemax="24" aria-valuenow="'+S.bag.length+'"><span style="width:'+meterPercent(S.bag.length,24)+'%"></span></div>'+(S.bag.length?S.bag.map(bagItemCard).join(''):'<p class="bag-empty">Le sac est vide.</p>')+'</div>';
 }
 
 /* TECH-012C — Construit l'écran de personnage, de progression et d'équipement à partir de l'état de la partie active. */
-function inventory(){if(mode!=='game')return;selected=null;update();show(characterDossier()+'<div class="gear-quick"><button id="jump-equipment">Équipement</button><button id="jump-bag">Sac</button></div><h2>Caractéristiques ('+S.ap+' points)</h2><div class="classes sheet-attributes">'+ATTR.map(characterAttributeCard).join('')+'</div><h2>Talents ('+S.points+' points)</h2>'+CLASSES[S.classId].skills.map(characterRankCard).join('')+'<h2 id="equipment-heading">Équipement</h2><p>Attaque +'+(S.atk+bonus('atk'))+' · Défense +'+(S.armor+bonus('def'))+' · Critique +'+bonus('crit')+'% · Esquive +'+bonus('dodge')+'% · Régénération +'+bonus('regen')+'</p>'+combatSummary()+setSummary()+equipmentRack()+'<h2 id="bag-heading">Sac '+S.bag.length+'/24</h2>'+bagCards()+'<button class="wide" id="close">Retour au donjon</button>');const spec=document.createElement('section');spec.innerHTML='<h2>Spécialisation</h2>'+(S.spec?'<p>'+SPECS[S.classId][S.spec==='offense'?0:1]+'</p><p>'+doctrineDescription(S.classId,S.spec)+'</p>':S.level<5?'<p>Débloquée au niveau 5.</p>':'<div class="classes"><button data-spec="offense">'+SPECS[S.classId][0]+'<small>+2 dégâts · '+doctrineDescription(S.classId,'offense')+'</small></button><button data-spec="defense">'+SPECS[S.classId][1]+'<small>+1 défense, +5% esquive · '+doctrineDescription(S.classId,'defense')+'</small></button></div>');panel.querySelector('h2').before(spec);const refresh=()=>{save();update();inventory()};const styles=document.createElement('section');styles.innerHTML='<h2>Style de combat</h2><p>Style actuel : '+currentStyle().name+'</p><div class="classes">'+Object.entries(STYLES).map(([key,v])=>'<button data-style="'+key+'" '+(v===currentStyle()?'disabled':'')+'>'+v.name+'<small>'+v.desc+'</small></button>').join('')+'</div>';panel.querySelector('h2').before(styles);styles.querySelectorAll('[data-style]').forEach(b=>b.onclick=()=>{const key=b.dataset.style;if(Object.hasOwn(STYLES,key)){S.combatStyle=key;refresh()}});const tree=document.createElement('section');const names={warrior:['Force brute','Fureur','Armure renforcée','Réflexes','Maître d’armes'],rogue:['Lame affûtée','Précision mortelle','Souplesse','Pas furtif','Maître des ombres'],ranger:['Flèche lourde','Œil de lynx','Peau dure','Instinct','Maître pisteur'],mage:['Puissance arcanique','Surcharge','Peau de pierre','Voile','Maître des arcanes']}[S.classId];const nodes=[['o1',2,[], '+1 dégât'],['o2',5,['o1'],'+8% critique'],['d1',2,[],'+1 défense'],['d2',5,['d1'],'+5% esquive'],['master',10,['o2','d2'],'+2 dégâts, +1 régénération']];const eligible=n=>S.points>0&&!S.nodes[n[0]]&&S.level>=n[1]&&n[2].every(k=>S.nodes[k]);tree.innerHTML='<h2>Arbre de talents passifs</h2><p>Chaque talent coûte 1 point. Maîtrise : les deux branches avancées requises.</p><div class="classes">'+nodes.map((n,i)=>'<button data-node="'+i+'" '+(eligible(n)?'':'disabled')+'>'+names[i]+'<small>'+n[3]+' · Niv. '+n[1]+(S.nodes[n[0]]?' · acquis':n[2].length?' · prérequis : '+n[2].map(k=>names[nodes.findIndex(x=>x[0]===k)]).join(', '):'')+'</small></button>').join('')+'</div>';panel.querySelector('[data-rank]').before(tree);const advanced=advancedTalentUI(refresh);tree.after(advanced);advanced.after(synergyTalentUI(refresh));const active=document.createElement('section');const canLearn=i=>!unlocked(i)&&S.points>0&&S.level>= (i===3?5:8)&&S.nodes[i===3?'o1':'d1'];active.innerHTML='<h2>Compétences avancées</h2>'+[3,4].map(i=>'<button class="wide" data-learn="'+i+'" '+(canLearn(i)?'':'disabled')+'>'+CLASSES[S.classId].skills[i][0]+' · '+(unlocked(i)?'acquis':'1 point · niveau '+(i===3?5:8)+' · branche '+(i===3?'offensive':'défensive'))+'</button>').join('')+'<h2>Barre de compétences</h2>'+S.bar.map((v,j)=>'<label>Emplacement '+(j+1)+'</label><select data-bar="'+j+'">'+CLASSES[S.classId].skills.map((sk,i)=>unlocked(i)?'<option value="'+i+'" '+(v===i?'selected':'')+'>'+sk[0]+'</option>':'').join('')+'</select>').join('');tree.before(active);active.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{let i=+b.dataset.learn;if(canLearn(i)){S.points--;S.activeTalents[i]=true;refresh()}});active.querySelectorAll('[data-bar]').forEach(b=>b.onchange=()=>{let j=+b.dataset.bar,i=+b.value;if(!unlocked(i))return;let other=S.bar.indexOf(i);if(other>=0)S.bar[other]=S.bar[j];S.bar[j]=i;refresh()});tree.querySelectorAll('[data-node]').forEach(b=>b.onclick=()=>{let n=nodes[+b.dataset.node];if(eligible(n)){S.points--;S.nodes[n[0]]=true;refresh()}});panel.querySelectorAll('[data-spec]').forEach(b=>b.onclick=()=>{if(S.level>=5&&!S.spec&&confirm('Choisir définitivement cette spécialisation ?')){S.spec=b.dataset.spec;refresh()}});panel.querySelectorAll('[data-attr]').forEach(b=>b.onclick=()=>{if(!S.ap)return;let i=+b.dataset.attr;S.ap--;S.attrs[i]++;if(i===2){S.maxHp+=2;S.hp+=2}if(i===3){S.maxRes++;S.res++}refresh()});panel.querySelectorAll('[data-rank]').forEach(b=>b.onclick=()=>{let i=+b.dataset.rank;if(!unlocked(i)||!S.points||S.ranks[i]>=5||S.level<S.ranks[i]*2)return;S.points--;S.ranks[i]++;refresh()});panel.querySelectorAll('[data-equip]').forEach(b=>b.onclick=()=>{let i=S.bag.findIndex(it=>it.id===+b.dataset.equip);if(i<0)return;let it=S.bag.splice(i,1)[0];if(S.equip[it.slot])S.bag.push(S.equip[it.slot]);S.equip[it.slot]=it;refresh()});panel.querySelectorAll('[data-off]').forEach(b=>b.onclick=()=>{let k=b.dataset.off;if(S.equip[k]&&S.bag.length<24){S.bag.push(S.equip[k]);S.equip[k]=null;refresh()}});panel.querySelectorAll('[data-drop]').forEach(b=>b.onclick=()=>{if(confirm('Jeter cet objet ?')){S.bag=S.bag.filter(it=>it.id!==+b.dataset.drop);refresh()}});document.getElementById('jump-equipment').onclick=()=>document.getElementById('equipment-heading').scrollIntoView({block:'start'});document.getElementById('jump-bag').onclick=()=>document.getElementById('bag-heading').scrollIntoView({block:'start'});document.getElementById('close').onclick=hide}
+function inventory(){
+  if(mode!=='game')return;
+  selected=null;
+  update();
+  show(characterDossier()+'<div class="gear-quick"><button id="jump-equipment">Équipement</button><button id="jump-bag">Sac</button></div><h2>Caractéristiques ('+S.ap+' points)</h2><div class="classes sheet-attributes">'+ATTR.map(characterAttributeCard).join('')+'</div><h2>Talents ('+S.points+' points)</h2>'+CLASSES[S.classId].skills.map(characterRankCard).join('')+'<h2 id="equipment-heading">Équipement</h2><p>Attaque +'+(S.atk+bonus('atk'))+' · Défense +'+(S.armor+bonus('def'))+' · Critique +'+bonus('crit')+'% · Esquive +'+bonus('dodge')+'% · Régénération +'+bonus('regen')+'</p>'+combatSummary()+setSummary()+equipmentRack()+'<h2 id="bag-heading">Sac '+S.bag.length+'/24</h2>'+bagCards()+'<button class="wide" id="close">Retour au donjon</button>');
+  const spec=document.createElement('section');
+  spec.innerHTML='<h2>Spécialisation</h2>'+(S.spec?'<p>'+SPECS[S.classId][S.spec==='offense'?0:1]+'</p><p>'+doctrineDescription(S.classId,S.spec)+'</p>':S.level<5?'<p>Débloquée au niveau 5.</p>':'<div class="classes"><button data-spec="offense">'+SPECS[S.classId][0]+'<small>+2 dégâts · '+doctrineDescription(S.classId,'offense')+'</small></button><button data-spec="defense">'+SPECS[S.classId][1]+'<small>+1 défense, +5% esquive · '+doctrineDescription(S.classId,'defense')+'</small></button></div>');
+  panel.querySelector('h2').before(spec);
+  /* TECH-012C — Après une modification de personnage, sauvegarde et reconstruit l'interface pour refléter les nouvelles valeurs. */
+  const refresh=()=>{save();update();inventory()};
+  const styles=document.createElement('section');
+  styles.innerHTML='<h2>Style de combat</h2><p>Style actuel : '+currentStyle().name+'</p><div class="classes">'+Object.entries(STYLES).map(([key,v])=>'<button data-style="'+key+'" '+(v===currentStyle()?'disabled':'')+'>'+v.name+'<small>'+v.desc+'</small></button>').join('')+'</div>';
+  panel.querySelector('h2').before(styles);
+  styles.querySelectorAll('[data-style]').forEach(b=>b.onclick=()=>{const key=b.dataset.style;if(Object.hasOwn(STYLES,key)){S.combatStyle=key;refresh()}});
+  const tree=document.createElement('section');
+  const names={warrior:['Force brute','Fureur','Armure renforcée','Réflexes','Maître d’armes'],rogue:['Lame affûtée','Précision mortelle','Souplesse','Pas furtif','Maître des ombres'],ranger:['Flèche lourde','Œil de lynx','Peau dure','Instinct','Maître pisteur'],mage:['Puissance arcanique','Surcharge','Peau de pierre','Voile','Maître des arcanes']}[S.classId];
+  const nodes=[['o1',2,[], '+1 dégât'],['o2',5,['o1'],'+8% critique'],['d1',2,[],'+1 défense'],['d2',5,['d1'],'+5% esquive'],['master',10,['o2','d2'],'+2 dégâts, +1 régénération']];
+  /* TECH-012C — Vérifie les conditions d'achat d'un talent passif de base. */
+  const eligible=n=>S.points>0&&!S.nodes[n[0]]&&S.level>=n[1]&&n[2].every(k=>S.nodes[k]);tree.innerHTML='<h2>Arbre de talents passifs</h2><p>Chaque talent coûte 1 point. Maîtrise : les deux branches avancées requises.</p><div class="classes">'+nodes.map((n,i)=>'<button data-node="'+i+'" '+(eligible(n)?'':'disabled')+'>'+names[i]+'<small>'+n[3]+' · Niv. '+n[1]+(S.nodes[n[0]]?' · acquis':n[2].length?' · prérequis : '+n[2].map(k=>names[nodes.findIndex(x=>x[0]===k)]).join(', '):'')+'</small></button>').join('')+'</div>';
+  panel.querySelector('[data-rank]').before(tree);
+  const advanced=advancedTalentUI(refresh);
+  tree.after(advanced);
+  advanced.after(synergyTalentUI(refresh));
+  const active=document.createElement('section');
+  const canLearn=i=>!unlocked(i)&&S.points>0&&S.level>= (i===3?5:8)&&S.nodes[i===3?'o1':'d1'];
+  active.innerHTML='<h2>Compétences avancées</h2>'+[3,4].map(i=>'<button class="wide" data-learn="'+i+'" '+(canLearn(i)?'':'disabled')+'>'+CLASSES[S.classId].skills[i][0]+' · '+(unlocked(i)?'acquis':'1 point · niveau '+(i===3?5:8)+' · branche '+(i===3?'offensive':'défensive'))+'</button>').join('')+'<h2>Barre de compétences</h2>'+S.bar.map((v,j)=>'<label>Emplacement '+(j+1)+'</label><select data-bar="'+j+'">'+CLASSES[S.classId].skills.map((sk,i)=>unlocked(i)?'<option value="'+i+'" '+(v===i?'selected':'')+'>'+sk[0]+'</option>':'').join('')+'</select>').join('');
+  tree.before(active);
+  active.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{let i=+b.dataset.learn;if(canLearn(i)){S.points--;S.activeTalents[i]=true;refresh()}});
+  /* TECH-012C — Si une compétence figure déjà dans la barre rapide, échange les deux emplacements plutôt que créer un doublon. */
+  active.querySelectorAll('[data-bar]').forEach(b=>b.onchange=()=>{let j=+b.dataset.bar,i=+b.value;if(!unlocked(i))return;let other=S.bar.indexOf(i);if(other>=0)S.bar[other]=S.bar[j];S.bar[j]=i;refresh()});
+  tree.querySelectorAll('[data-node]').forEach(b=>b.onclick=()=>{let n=nodes[+b.dataset.node];if(eligible(n)){S.points--;S.nodes[n[0]]=true;refresh()}});
+  panel.querySelectorAll('[data-spec]').forEach(b=>b.onclick=()=>{if(S.level>=5&&!S.spec&&confirm('Choisir définitivement cette spécialisation ?')){S.spec=b.dataset.spec;refresh()}});
+  panel.querySelectorAll('[data-attr]').forEach(b=>b.onclick=()=>{if(!S.ap)return;let i=+b.dataset.attr;S.ap--;S.attrs[i]++;if(i===2){S.maxHp+=2;S.hp+=2}if(i===3){S.maxRes++;S.res++}refresh()});
+  panel.querySelectorAll('[data-rank]').forEach(b=>b.onclick=()=>{let i=+b.dataset.rank;if(!unlocked(i)||!S.points||S.ranks[i]>=5||S.level<S.ranks[i]*2)return;S.points--;S.ranks[i]++;refresh()});
+  /* TECH-012C — Équipe l'objet sélectionné et replace l'ancien équipement dans le sac si nécessaire. */
+  panel.querySelectorAll('[data-equip]').forEach(b=>b.onclick=()=>{let i=S.bag.findIndex(it=>it.id===+b.dataset.equip);if(i<0)return;let it=S.bag.splice(i,1)[0];if(S.equip[it.slot])S.bag.push(S.equip[it.slot]);S.equip[it.slot]=it;refresh()});
+  panel.querySelectorAll('[data-off]').forEach(b=>b.onclick=()=>{let k=b.dataset.off;if(S.equip[k]&&S.bag.length<24){S.bag.push(S.equip[k]);S.equip[k]=null;refresh()}});
+  panel.querySelectorAll('[data-drop]').forEach(b=>b.onclick=()=>{if(confirm('Jeter cet objet ?')){S.bag=S.bag.filter(it=>it.id!==+b.dataset.drop);refresh()}});
+  document.getElementById('jump-equipment').onclick=()=>document.getElementById('equipment-heading').scrollIntoView({block:'start'});
+  document.getElementById('jump-bag').onclick=()=>document.getElementById('bag-heading').scrollIntoView({block:'start'});
+  document.getElementById('close').onclick=hide
+}
+/* TECH-012C — Ouvre le menu de pause ; l'abandon définitif de la partie demande confirmation. */
 function menu(){if(mode!=='game')return;selected=null;update();show(`<h1>Pause</h1><p>Partie sauvegardée automatiquement sur cet appareil. Une mort supprime la sauvegarde.</p><button class="wide" id="back">Continuer</button><button class="wide" id="pauseopts">Options graphiques</button><button class="wide" id="reset">Abandonner et recommencer</button>`);document.getElementById('back').onclick=hide;document.getElementById('pauseopts').onclick=()=>options(menu);document.getElementById('reset').onclick=()=>{if(confirm('Abandonner définitivement cette partie ?'))endRun('abandoned')}}
 document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();let [dx,dy]=b.dataset.d.split(',').map(Number);move(dx,dy)}));document.getElementById('wait').addEventListener('pointerdown',e=>{e.preventDefault();if(mode==='game'&&overlay.classList.contains('hidden')){selected=null;searchNearby();finish()}});document.querySelectorAll('[data-skill]').forEach(b=>b.addEventListener('click',()=>activate(+b.dataset.skill)));document.getElementById('consumables').onclick=consumablesMenu;document.getElementById('weaponAction').onclick=aimWeapon;document.getElementById('bandage').onclick=bandage;document.getElementById('inventory').onclick=inventory;document.getElementById('menu').onclick=menu;document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});startMenu();applyPrefs();window.addEventListener("resize",applyPrefs);if(typeof ResizeObserver!=="undefined")new ResizeObserver(resizeMap).observe(canvas.parentElement);
 })();
