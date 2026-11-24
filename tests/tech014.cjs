@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {execFileSync}=require('node:child_process');
-const {BASE,CLASSES_IDS,rng32,createSession,catalogDocument,referencePack}=require('../tools/godot/reference.cjs');
+const {BASE,CLASSES_IDS,rng32,createSession,catalogDocument,digest,referencePack}=require('../tools/godot/reference.cjs');
 const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const baseline=execFileSync('git',['show',BASE+':index.html'],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024});
@@ -47,12 +47,19 @@ for(const run of actual.campaigns){
   const replay=createSession(html,run.seed);replay.start(run.id);
   const initial=replay.snapshot();
   assert.equal(initial.S.classId,run.id);
-  for(const command of run.commands)replay.action(command);
+  assert.deepEqual(initial,run.initialState);
+  assert.equal(digest(initial),run.trace[0].stateHash);
+  for(const [i,command] of run.commands.entries()){
+    assert.equal(digest(replay.action(command)),run.trace[i+1].stateHash);
+    assert.deepEqual(replay.randomState(),run.trace[i+1].rng);
+  }
+  assert.deepEqual(replay.snapshot(),run.finalState);
   assert.deepEqual(replay.randomState(),run.final.rng);
   assert.equal(replay.snapshot().S.turn,run.final.turn);
   assert.equal(replay.snapshot().S.floor,run.final.floor);
   assert.equal(replay.snapshot().S.hp,run.final.hp);
   assert.deepEqual(replay.history(),run.history);
 }
+if(process.argv[2])fs.writeFileSync(process.argv[2],JSON.stringify(actual,null,2)+'\n');
 console.log('TECH-014 : intégrité, isolation, RNG, catalogues, 12 plans et 4 campagnes déterministes');
 console.log(JSON.stringify(actual.campaigns.map(r=>({id:r.id,seed:r.seed,reason:r.reason,actions:r.commands.length,turn:r.final.turn,floor:r.final.floor,hp:r.final.hp,outcome:r.final.outcome})),null,2));
