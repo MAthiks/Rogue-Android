@@ -602,9 +602,13 @@ function attackAttribute(profile=null){
 /* TECH-012A — Calcule les dégâts du joueur en combinant arme, attribut, équipement, talents et effets contextuels. Applique ensuite le critique puis la protection de l'affixe armored. */
 function outgoingDamage(m,damage,profile=null,critical=false){
  let d=Math.max(1,damage+(profile?.power||0)+S.atk+bonus('atk')+Math.floor(attackAttribute(profile)/4)+(S.boost>0?3:0));
- if(S.spec==='offense')d+=2;if(m.exposed>0)d+=2;if(S.nodes.o1)d++;if(S.nodes.master)d+=2;
+ if(S.spec==='offense')d+=2;
+ if(m.exposed>0)d+=2;
+ if(S.nodes.o1)d++;
+ if(S.nodes.master)d+=2;
  d+=talentBonus(profile?.skill?'skill':'basic')+(profile?.ranged?talentBonus('ranged'):0)+(m.hp*2<=m.maxHp?talentBonus('lowHp'):0);
  d+=doctrineBonus(S,'damage',m,profile)+synergyDamage(m,profile);
+ /* TECH-012C — Le critique multiplie les dégâts par 1,5 avant la réduction de l'affixe blindé. */
  if(critical)d=Math.ceil(d*1.5);
  if(m.affix==='armored')d=Math.max(1,d-Math.max(0,2-(profile?.pierce||0)));
  return d;
@@ -612,11 +616,14 @@ function outgoingDamage(m,damage,profile=null,critical=false){
 /* TECH-012A — Calcule les dégâts subis après réduction défensive. À partir de l'étage 7, une fraction minimale des dégâts bruts empêche l'armure de neutraliser totalement les attaques. */
 function incomingDamage(m,power=0,variance=0){
  const raw=m.atk+power+(m.affix==='furious'&&m.hp*2<=m.maxHp?2:0)+variance;
- const reduction=S.armor+bonus('def')+currentStyle().def+talentBonus('def')+Math.floor(S.attrs[2]/6)+(S.guard>0?2:0)+(S.spec==='defense'?1:0)+(S.nodes.d1?1:0)+doctrineBonus(S,'def');
+ const reduction=S.armor+bonus('def')+currentStyle().def+
+   talentBonus('def')+Math.floor(S.attrs[2]/6)+(S.guard>0?2:0)+
+   (S.spec==='defense'?1:0)+(S.nodes.d1?1:0)+doctrineBonus(S,'def');
  // Above early floors, armor alone cannot nullify heavy strikes; shields still absorb damage.
  const minimum=S.floor>=7?Math.ceil(raw*(m.boss||m.elite?0.30:0.20)):1;
  return Math.max(1,minimum,raw-reduction);
 }
+/* TECH-012C — Régénération par tour : les attaques à distance payantes et compétences offensives ont des plafonds propres. */
 function resourceRegen(rangedWeapon=false,offensiveSkill=false){
  if(rangedWeapon)return 1;
  return Math.min(offensiveSkill?2:BALANCE.regenMax,1+(S.classId==='rogue'&&S.turn%2===0?1:0)+Math.min(2,Math.floor(S.attrs[3]/12))+Math.min(2,bonus('regen'))+(S.nodes.master?1:0));
@@ -1658,13 +1665,18 @@ function promoteEnemies(monsters,floor,seed,stairs){
   }
   return out;
 }
+/* TECH-012C — Gère les attaques spéciales des boss historiques : annonce, résolution, recharge et changement de phase à mi-vie. */
 function bossAction(m,player,board){
   if(!m.boss)return null;
   const d=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),same=(a,b)=>a.x===b.x&&a.y===b.y;
   const ray=(a,b)=>{let n=d(a,b),prev=a;if(!n)return true;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y))return false;prev=p}return true};
-  const changed=m.phase!==2&&m.hp*2<=m.maxHp;if(changed)m.phase=2;
+  const changed=m.phase!==2&&m.hp*2<=m.maxHp;
+  if(changed)m.phase=2;
+  /* TECH-012C — La résolution utilise les cases annoncées au tour précédent, et vérifie encore la ligne d'attaque. */
   if(m.intent){
-    const intent=m.intent;delete m.intent;m.specialCD=m.phase===2?2:3;
+    const intent=m.intent;
+    delete m.intent;
+    m.specialCD=m.phase===2?2:3;
     return {type:'release',hit:intent.cells.some(p=>same(p,player))&&ray(m,player),power:intent.power,changed};
   }
   if(m.specialCD>0){m.specialCD--;return changed?{type:'phase'}:null}
@@ -1723,18 +1735,34 @@ function tacticalTurn(m,player,all,board,contacts){
   const role=m.role||(m.elite?'guardian':m.kind==='Brute'?'brute':'wanderer');
   const occupied=(x,y)=>all.some(a=>a!==m&&a.hp>0&&a.x===x&&a.y===y);
   const legal=(a,b)=>stepOK(b.x,b.y,a.x,a.y)&&!occupied(b.x,b.y)&&!same(b,player);
-  const neighbors=a=>{const out=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(dx||dy){let b={x:a.x+dx,y:a.y+dy};if(legal(a,b))out.push(b)}return out};
+  const neighbors=a=>{
+    const out=[];
+    for(let dy=-1;dy<=1;dy++)
+      for(let dx=-1;dx<=1;dx++)
+        if(dx||dy){
+          let b={x:a.x+dx,y:a.y+dy};
+          if(legal(a,b))out.push(b)
+        }
+    return out
+  };
   const line=(a,b,blockActors=false)=>{
     const n=dist(a,b);if(!n)return true;let prev=a;
     for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};
       if(!stepOK(p.x,p.y,prev.x,prev.y)||(blockActors&&i<n&&occupied(p.x,p.y)))return false;prev=p}
     return true;
   };
+  /* TECH-012C — Perception limitée à huit cases et à une ligne praticable ; le traqueur peut bénéficier d'un contact allié. */
   const d=dist(m,player),sees=d<=8&&line(m,player);
   const alert=role==='tracker'&&contacts.some(a=>a!==m&&a.source!==m&&(a.source?.hp??a.hp)>0&&dist(m,a)<=4&&line(m,a));
   const wait={type:'wait'};
-  if(role==='archer'&&m.aim){const aimed=m.aim;delete m.aim;return same(aimed,player)&&d<=5&&d>=2&&line(m,player,true)?{type:'attack',ranged:true}:wait}
+  /* TECH-012C — Un tir annoncé n'atteint que la position visée si elle est encore occupée et accessible. */
+  if(role==='archer'&&m.aim){
+    const aimed=m.aim;
+    delete m.aim;
+    return same(aimed,player)&&d<=5&&d>=2&&line(m,player,true)?{type:'attack',ranged:true}:wait
+  }
   if(role==='ambusher'&&!m.awake){if(!(sees&&(d<=4||m.hp<m.maxHp)))return wait;m.awake=true}
+  /* TECH-012C — La mémoire de poursuite dure cinq tours après une perception ou une alerte. */
   if(sees||alert){m.lastSeen={x:player.x,y:player.y};m.memory=5}
   else if(m.memory>0)m.memory--;
   if(!m.memory){delete m.lastSeen;delete m.memory}
@@ -1753,21 +1781,35 @@ function tacticalTurn(m,player,all,board,contacts){
   }
   const ally=role==='tracker'&&(sees||alert)&&all.find(a=>a!==m&&a.hp>0&&dist(a,target)===1);
   if(ally)goals.sort((a,b)=>dist(b,ally)-dist(a,ally));
+  /* TECH-012C — Recherche en largeur vers les cases voisines de la cible mémorisée ; le rang départage les chemins de même longueur. */
   const goalRank=new Map(goals.map((p,i)=>[key(p),i])),visited=new Set([key(m)]),queue=[{x:m.x,y:m.y,depth:0,first:null}];
   let best=null;
   for(let i=0;i<queue.length;i++){const a=queue[i];if(best&&a.depth>best.depth)break;
     if(a.first&&goalRank.has(key(a))){if(!best||goalRank.get(key(a))<goalRank.get(key(best)))best=a;continue}
+    /* TECH-012C — Borne de profondeur pour limiter le coût de la recherche de chemin. */
     if(a.depth>=24)continue;
     for(const b of neighbors(a)){const k=key(b);if(visited.has(k))continue;visited.add(k);queue.push({...b,depth:a.depth+1,first:a.first||b})}
   }
   return best?{type:'move',...best.first}:wait;
 }
+/* TECH-012C — Résout une attaque ennemie : disparition, esquive, réduction, absorption par le bouclier, dégâts réels, drain et mort éventuelle. */
 function enemyAttack(m,ranged,power=0,drain=false){
   if(S.veil>0){S.veil=0;say('Attaque évitée par Disparition.');return}
   if(rand(100)<dodgeChance()){say('Attaque esquivée.');return}
   let dmg=incomingDamage(m,power,rand(2));
+  /* TECH-012C — Le bouclier absorbe les dégâts après la réduction défensive. */
   if(S.shield>0){let absorbed=Math.min(dmg,S.shield);S.shield-=absorbed;dmg-=absorbed}
-  const actual=Math.min(S.hp,dmg);S.hp=Math.max(0,S.hp-dmg);combatFx(actual>0?'hurt':'guard',actual>0?actual:undefined);if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));say(m.kind+(ranged?(m.species?' lance un projectile : -':' te décoche une flèche : -'):' te frappe : -')+dmg+' PV');if(drain&&actual>0){const n=Math.min(2,S.res);S.res-=n;say('Drain : -'+n+' ressources.')}if(S.hp===0)die();
+  const actual=Math.min(S.hp,dmg);
+  S.hp=Math.max(0,S.hp-dmg);
+  combatFx(actual>0?'hurt':'guard',actual>0?actual:undefined);
+  if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));
+  say(m.kind+(ranged?(m.species?' lance un projectile : -':' te décoche une flèche : -'):' te frappe : -')+dmg+' PV');
+  if(drain&&actual>0){
+    const n=Math.min(2,S.res);
+    S.res-=n;
+    say('Drain : -'+n+' ressources.')
+  }
+  if(S.hp===0)die();
 }
 // GAME-010C: coordination uses live positions and existing intent fields only.
 const AI_FAMILY={
@@ -1792,9 +1834,11 @@ function aiNeighbors(p,board){
  const out=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&board.stepOK(p.x+dx,p.y+dy,p.x,p.y))out.push({x:p.x+dx,y:p.y+dy});return out;
 }
 function aiSame(a,b){return a.x===b.x&&a.y===b.y}
+/* TECH-012C — Recense les cases menacées par les intentions et visées des ennemis actifs. */
 function aiThreatCells(all,skip=null){
  return all.filter(m=>m!==skip&&m.hp>0&&!m.stun).flatMap(m=>m.intent?.cells|| (m.aim?[m.aim]:[]));
 }
+/* TECH-012C — Simule les cases de fuite libres, éventuellement après un déplacement ennemi hypothétique. */
 function aiEscapeCells(player,all,board,extra=[],moving=null,dest=null){
  const threats=[...aiThreatCells(all),...extra];
  return aiNeighbors(player,board).filter(p=>!all.some(m=>m.hp>0&&aiSame(m===moving?dest:m,p))&&!threats.some(t=>aiSame(t,p)));
@@ -1856,23 +1900,69 @@ function coordinatedAction(m,player,all,board,contacts,base){
 }
 /* TECH-012A — Joue la phase des ennemis après une action du joueur. Traite les états temporaires et interrompt la boucle si le personnage meurt. */
 function enemyPhase(){
+  /* TECH-012C — Les contacts sont relevés au début de la phase ennemie pour alimenter la coordination. */
   const contacts=monsters.filter(m=>{
     if(m.hp<=0||m.stun>0||dist(m,S)>8)return false;
     const n=dist(m,S);let prev=m;
     for(let i=1;i<=n;i++){const p={x:Math.round(m.x+(S.x-m.x)*i/n),y:Math.round(m.y+(S.y-m.y)*i/n)};if(!stepOK(p.x,p.y,prev.x,prev.y))return false;prev=p}
     return true;
   }).map(m=>({x:m.x,y:m.y,source:m}));
+  /* TECH-012C — Parcourt une copie de la liste : les effets de saignement peuvent retirer un ennemi pendant la phase. */
   for(const m of [...monsters]){
     if(S.dead)break;
-    if(m.bleed>0){m.bleed--;m.hp-=2;say(m.kind+' saigne : -2 PV');if(m.hp<=0){kill(m);continue}}
+    if(m.bleed>0){
+      m.bleed--;
+      m.hp-=2;
+      say(m.kind+' saigne : -2 PV');
+      if(m.hp<=0){
+        kill(m);
+        continue
+      }
+    }
     if(m.exposed>0)m.exposed--;
-    if(m.stun>0){m.stun--;delete m.aim;delete m.intent;continue}
+    if(m.stun>0){
+      m.stun--;
+      delete m.aim;
+      delete m.intent;
+      continue
+    }
     const enemyStep=(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&featureAt(x,y)?.type!=='merchant'&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y));
+    /* TECH-012C — Priorité aux actions spéciales des boss, puis aux capacités de créatures et enfin à la tactique ordinaire. */
     const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
-    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.')}else{m.specialCD=1;say(m.kind+' retient son attaque.')}continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
+    if(special){
+      if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');
+      if(special.type==='announce'){
+        if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){
+          say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.')
+        }else{
+          m.specialCD=1;
+          say(m.kind+' retient son attaque.')
+        }
+        continue
+      }
+      if(special.type==='release'){
+        if(special.hit)enemyAttack(m,false,special.power,special.drain);
+        else say(m.ability+' manque sa cible.');
+        continue
+      }
+    }
     const creature=creatureAction(m,S,monsters,{W,H,stepOK:enemyStep});
-    if(creature){delete m.aim;if(creature.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.')}else m.creatureCD=1;continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
-    const board={W,H,stepOK:enemyStep};const baseAction=tacticalTurn(m,S,monsters,board,contacts);const action=coordinatedAction(m,S,monsters,board,contacts,baseAction);
+    if(creature){
+      delete m.aim;
+      if(creature.type==='announce'){
+        if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){
+          say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.')
+        }else m.creatureCD=1;
+        continue
+      }
+      if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);
+      else say(creature.name+' manque sa cible.');
+      continue
+    }
+    const board={W,H,stepOK:enemyStep};
+    /* TECH-012C — La coordination ajuste l'action individuelle en fonction des positions et menaces des alliés. */
+    const baseAction=tacticalTurn(m,S,monsters,board,contacts);
+    const action=coordinatedAction(m,S,monsters,board,contacts,baseAction);
     if(action.type==='attack')enemyAttack(m,action.ranged);
     else if(action.type==='move'){m.x=action.x;m.y=action.y}
     else if(action.type==='aim'&&los(m.x,m.y))say(m.kind+' te vise ! Déplace-toi.');
