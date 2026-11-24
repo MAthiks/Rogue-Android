@@ -71,6 +71,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.equal((await read()).S.combatStyle,'defensive');await page.locator('#close').tap();
     await page.reload();await page.locator('#resume').tap();
     assert.equal((await read()).S.combatStyle,'defensive');
+    // GAME-005C: mobile talent purchase, gating, and persistence.
+    const fixture3=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.level=20;d.S.points=5;d.S.spec='defense';d.S.nodes={d1:true};return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-3')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-3','1')}},{key,data:fixture3});
+    await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
+    assert.ok(await page.locator('[data-advanced="laststand"]').isDisabled());
+    for(const id of ['resolve','bulwark','laststand'])await page.locator('[data-advanced="'+id+'"]').tap();
+    assert.ok(await page.locator('[data-advanced="frenzy"]').isDisabled());
+    assert.equal((await read()).S.points,2);assert.equal((await read()).S.nodes.adv_laststand,true);
+    await page.locator('#close').tap();await page.reload();await page.locator('#resume').tap();
+    assert.equal((await read()).S.nodes.adv_laststand,true);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
