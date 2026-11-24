@@ -15,6 +15,33 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     const url='http://127.0.0.1:'+server.address().port;
     const read=()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
     await page.goto(url);
+    // GAME-009A: actual title screen geometry and controls at three mobile sizes.
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('.crypt-start').waitFor({state:'visible'});
+      assert.equal(await page.locator('.crypt-brand h1').textContent(),'CRYPTGRAVE');
+      assert.equal(await page.locator('.crypt-hero svg').count(),1);
+      assert.equal(await page.locator('.crypt-class-card .class-portrait').count(),4);
+      for(const [id,hp,res,spec] of [['warrior',28,'Endurance 12','Berserker · Sentinelle'],['rogue',21,'Énergie 14','Assassin · Duelliste'],['ranger',23,'Concentration 12','Tireur · Survivant'],['mage',18,'Mana 16','Évocateur · Protecteur']]){
+        const card=page.locator('[data-class="'+id+'"]');
+        assert.equal(await card.locator('.crypt-class-hp').textContent(),'PV '+hp);
+        assert.ok((await card.locator('.crypt-class-stats').textContent()).includes(res));
+        assert.equal(await card.locator('.crypt-class-spec').textContent(),spec);
+        assert.ok(await card.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'card fits '+id);
+      }
+      if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.locator('.crypt-start .classes').scrollIntoViewIfNeeded();await page.locator('.crypt-start .classes').screenshot({path:'art-preview/class-cards-'+width+'x'+height+'.png'});await page.locator('.crypt-hero').scrollIntoViewIfNeeded()}
+      assert.equal(await page.locator('[data-class]').count(),4);
+      assert.ok(await page.locator('.crypt-brand h1').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'title fits');
+      assert.ok(await page.locator('.crypt-start').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'no horizontal overflow');
+      if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.screenshot({path:'art-preview/title-'+width+'x'+height+'.png'})}
+      for(const selector of ['#startHistory','#startopts','#startTransfer','[data-class="mage"]']){
+        const button=page.locator(selector);await button.scrollIntoViewIfNeeded();
+        assert.ok(await button.isVisible(),'menu action reachable '+selector);
+      }
+      await page.locator('#startopts').tap();await page.locator('#optback').tap();
+      await page.locator('#startTransfer').tap();await page.locator('#transferBack').tap();
+    }
+    await page.setViewportSize({width:393,height:851});
     assert.equal(await page.locator('[data-class]').count(),4);
     await page.locator('[data-class="warrior"]').tap();
     let d=await read();assert.equal(d.S.floor,1);
@@ -34,6 +61,31 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     // Verify real canvas geometry and nonempty rendered pixels.
     assert.ok(await page.locator('canvas').evaluate(c=>{const b=c.getBoundingClientRect(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colors=new Set();for(let i=0;i<p.length;i+=4)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return b.width>0&&b.height>0&&colors.size>3}));
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
+    // GAME-009C: inspect actual live dossier, and verify non-mutating rendering.
+    const sheetSave=await read();
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      const sheet=page.locator('.crypt-sheet');
+      await sheet.scrollIntoViewIfNeeded();
+      assert.equal(await sheet.locator('h1').textContent(),'Guerrier');
+      assert.equal(await sheet.locator('[data-sheet-meter="hp"]').textContent(),sheetSave.S.hp+'/'+sheetSave.S.maxHp);
+      assert.equal(await sheet.locator('[data-sheet-meter="res"]').textContent(),sheetSave.S.res+'/'+sheetSave.S.maxRes);
+      assert.equal(await sheet.locator('.sheet-sprite').count(),1);
+      assert.equal(await page.locator('.sheet-attributes [data-attr]').count(),6);
+      assert.equal(await page.locator('[data-rank] .sheet-rank-dots').count(),5);
+      assert.ok(await sheet.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'sheet fits');
+      if(process.env.ROGUE_ART_PREVIEW){await page.locator('#panel').evaluate(e=>e.scrollTop=0);await page.screenshot({path:'art-preview/character-sheet-'+width+'x'+height+'.png'});await page.locator('.sheet-attributes').screenshot({path:'art-preview/attributes-'+width+'x'+height+'.png'})}
+      assert.deepEqual(await read(),sheetSave);
+    }
+    await page.setViewportSize({width:393,height:851});
+    await page.locator('#close').tap();
+    // Exercise attribute and rank actions with an authentic save fixture.
+    const sheetFixture=await read();sheetFixture.S.ap=1;sheetFixture.S.points=1;sheetFixture.S.level=3;
+    await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:sheetFixture,marker:'sheet-009c'});
+    await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
+    await page.locator('[data-attr="2"]').tap();
+    let sheetAfter=await read();assert.equal(sheetAfter.S.ap,0);assert.equal(sheetAfter.S.attrs[2],sheetFixture.S.attrs[2]+1);assert.equal(sheetAfter.S.maxHp,sheetFixture.S.maxHp+2);
+    await page.locator('[data-rank="0"]').tap();sheetAfter=await read();assert.equal(sheetAfter.S.points,0);assert.equal(sheetAfter.S.ranks[0],sheetFixture.S.ranks[0]+1);assert.equal(sheetAfter.S.turn,sheetFixture.S.turn);
     await page.locator('#close').tap();
     // GAME-005A: persisted legendary pieces, mobile inventory, and live set activation.
     const fixture1=await page.evaluate(k=>{
@@ -46,7 +98,26 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
     assert.ok(await page.locator('.gear-detail').first().textContent().then(s=>s.includes('Légendaire')));
     const ids=(await read()).S.bag.map(i=>i.id);
+    const equipmentSave=await read(),emptySprite=await page.locator('.equipment-sprite').innerHTML();
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('#jump-equipment').tap();
+      assert.equal(await page.locator('.gear-rack [data-off]').count(),5);
+      assert.equal(await page.locator('.gear-rack [data-off]:disabled').count(),5);
+      assert.ok(await page.locator('.gear-rack').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'equipment fits');
+      await page.locator('#jump-bag').tap();
+      assert.equal(await page.locator('.crypt-bag [data-equip]').count(),3);
+      assert.equal(await page.locator('.bag-capacity b').textContent(),'3/24');
+      assert.ok(await page.locator('.crypt-bag').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'bag fits');
+      if(process.env.ROGUE_ART_PREVIEW){await page.locator('.gear-rack').screenshot({path:'art-preview/equipment-empty-'+width+'x'+height+'.png'});await page.locator('.crypt-bag').screenshot({path:'art-preview/bag-'+width+'x'+height+'.png'})}
+      assert.deepEqual(await read(),equipmentSave);
+    }
+    await page.setViewportSize({width:393,height:851});
     for(const id of ids)await page.locator('[data-equip="'+id+'"]').tap();
+    assert.notEqual(await page.locator('.equipment-sprite').innerHTML(),emptySprite);
+    assert.equal(await page.locator('.gear-rack [data-off]:enabled').count(),3);
+    assert.equal(await page.locator('.bag-capacity b').textContent(),'0/24');
+    if(process.env.ROGUE_ART_PREVIEW)await page.locator('.gear-rack').screenshot({path:'art-preview/equipment-equipped-mobile.png'});
     assert.ok((await page.locator('#panel').textContent()).includes('Bastion de fer : 3/3'));
     assert.equal((await read()).S.equip.weapon.id,ids[0]);
     await page.locator('[data-off="helmet"]').tap();
@@ -307,6 +378,27 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       assert.ok(await page.locator('#game').evaluate(c=>{const r=c.getBoundingClientRect();return r.width>0&&r.height>0}));
       if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-'+width+'x'+height+'.png'});
     }
+    // GAME-009E: all pad sizes, readable HUD and no mutation during display changes.
+    const displaySave=await read();
+    assert.equal(await page.locator('#hudClass .class-icon').count(),1);
+    assert.equal(await page.locator('[data-skill] .skill-cost').count(),3);
+    assert.ok((await page.locator('[data-skill] .skill-cost').allTextContents()).every(s=>/^Coût [0-9]+$/.test(s)));
+    assert.equal(await page.locator('#log').getAttribute('aria-label'),'Journal de combat');
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      for(const pad of [85,100,115]){
+        await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
+        await page.locator('#padsize').selectOption(String(pad));
+        await page.locator('#optback').tap();await page.locator('#back').tap();
+        await page.locator('#game').evaluate(c=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        assert.equal(await page.locator('[data-d]').count(),8);
+        assert.ok(await page.locator('#pad button,.skills button,.tools button').evaluateAll(a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=25&&r.height>=25&&r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})), 'touch geometry '+width+'x'+height+' pad '+pad);
+        assert.ok(await page.locator('main').evaluate(e=>e.clientHeight>=100),'play area remains visible');
+        assert.deepEqual(await read(),displaySave);
+        if(process.env.ROGUE_ART_PREVIEW&&pad===100)await page.screenshot({path:'art-preview/dungeon-hud-'+width+'x'+height+'.png'});
+      }
+    }
+    await page.locator('#menu').tap();await page.locator('#pauseopts').tap();await page.locator('#padsize').selectOption('100');await page.locator('#optback').tap();await page.locator('#back').tap();
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});

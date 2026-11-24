@@ -1,0 +1,5 @@
+# GAME-009E — Interface du donjon
+
+Cadres bronze, palette rouge/brun et acier, portrait de classe dans le HUD, jauges PV/ressource/XP et valeurs réelles, pavé directionnel à huit directions et attente, trois compétences avec coût en ressource et durée restante du cooldown. Journal des trois derniers messages séparés par lignes, sans nouveau stockage. Les contrôles d'action et les effets de combat gardent leur fonctionnement. Cadre du donjon et commandes adaptés au portrait et paysage ; options de zoom et tailles du pavé conservées.
+
+Comparaison du script : seules quatre modifications de présentation (journal, portrait HUD, nettoyage au menu, libellés de compétence). Aucun changement de carte, visibilité, IA, règles, sauvegardes ou handlers tactiles. Tests simulés des quatre classes, jauges, journal et absence de mutation réussis. Chromium : neuf combinaisons de trois résolutions et trois tailles de pavé, visibilité des contrôles, surface de carte, coûts et captures dungeon-hud-*.png. CI officielle et recette physique nécessaires. Dépend de PR #37.

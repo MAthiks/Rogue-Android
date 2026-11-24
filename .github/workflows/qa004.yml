@@ -33,6 +33,18 @@ jobs:
           git show 2918d5ba49c37440f01c26fc5cd41bc4d0938eba:index.html > /tmp/rogue-game004.html
           git show 3344817bc9e6d4c7d7ea8acf3c7af118fe2c0e60:index.html > /tmp/rogue-rc1.html
           node tests/game008a.cjs /tmp/rogue-game004.html /tmp/rogue-rc1.html
+      - name: Verify portable saves from validated Android 0.9.0
+        run: |
+          git show e8f7796d2a30aec0901d90a02f2b46ae630220ba:index.html > /tmp/cryptgrave-090.html
+          node tests/game008e3.cjs /tmp/cryptgrave-090.html
+      - name: Verify illustrated class cards
+        run: node tests/game009b.cjs
+      - name: Verify character dossier
+        run: node tests/game009c.cjs
+      - name: Verify equipment and bag presentation
+        run: node tests/game009d.cjs
+      - name: Verify dungeon HUD and journal
+        run: node tests/game009e.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:

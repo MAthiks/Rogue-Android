@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.application'
 }
+def artPreview = project.hasProperty('cryptgraveArtPreview')
 android {
     namespace 'com.mathiks.cryptgrave'
     compileSdk 35
@@ -8,12 +9,19 @@ android {
         applicationId 'com.mathiks.cryptgrave'
         minSdk 23
         targetSdk 35
-        versionCode 1
-        versionName '0.9.0'
+        versionCode artPreview ? 2 : 1
+        versionName artPreview ? '0.9.1' : '0.9.0'
+        manifestPlaceholders = [appLabel: 'CRYPTGRAVE']
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     buildTypes {
-        debug { }
+        debug {
+            if (artPreview) {
+                applicationIdSuffix '.artpreview'
+                versionNameSuffix '-art-rc1'
+                manifestPlaceholders = [appLabel: 'CRYPTGRAVE (Art RC)']
+            }
+        }
         release { minifyEnabled false }
     }
     compileOptions {

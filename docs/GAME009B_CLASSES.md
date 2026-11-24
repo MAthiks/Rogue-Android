@@ -1,0 +1,5 @@
+# GAME-009B — Sélection des personnages
+
+Quatre portraits originaux SVG 68×68, palette médiévale bronze/rouge et couleurs de classe. Cartes affichant le rôle, la description officielle, les PV et la ressource initiaux, les deux spécialisations réelles. Les sprites 16×16 existants restent visibles et inchangés. Pas de nouveau fichier à charger ni dépendance réseau.
+
+Les commandes data-class gardent exactement leur comportement, le moteur et les sauvegardes sont inchangés hors présentation. Les cartes n'effectuent aucune écriture, et les textes de statistiques proviennent directement de CLASSES et SPECS. Les tests simulés ont vérifié les quatre illustrations distinctes, l'exactitude et l'absence de mutation. Tests Chromium à 393×851, 320×640 et 851×393, captures class-cards-*.png. Dépend de PR #34 et indirectement de PR #33. CI et recette physique avant fusion.
