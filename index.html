@@ -1122,7 +1122,51 @@ function playerSprite(classId,equip={}){
 function drawPlayerSprite(px,py){
  for(const [c,x,y,w,h] of playerSprite(S.classId,S.equip)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+// GAME-007C: 23 hand-authored pixel silhouettes. Bosses keep their previous rendering.
+const ENEMY_ART={
+ guardian:['...oooo...','..oHHHHo..','..oHeeHo..','oooHHHHooo','oHhHHHHhHo','oHhHHHHhHo','oHhHHHHhHo','ooohhhhooo','..oHooHo..','..oHooHo..','..ooo.ooo.'],
+ brute:['..oo..oo..','.oHooooHo.','.oHHHHHHo.','ooHeeeHHoo','oHHHHHHHHo','oHhHHHHhHo','oHhHHHHhHo','ooHHHHHHoo','..oHooHo..','.oHHo.oHHo','.oooo.oooo'],
+ wanderer:['....ooo...','...oHHHo..','...oeeHo..','....ooo...','..ooHHoo..','.oHoHHHo..','.o.oHHoHo.','...oHHo.o.','...oHoo...','..oHoHo...','..ooo.oo..'],
+ archer:['...oooo...','..oHHHHo..','..oHeeHo.o','...oooo.oh','..oHHHo.oh','..oHHHoooh','..oHHHo.oh','..oHHHo.oh','..oHooHo.o','..oHoHo...','..ooo.oo..'],
+ ambusher:['....oo....','...oHHo...','..oHHHHo..','..oHeeHo..','.ooHHHHoo.','oHhHHHHhHo','oHHHHHHHHo','.oHHHHHHo.','..oHHHHo..','.oHHooHHo.','oooo..oooo'],
+ coward:['....oo....','...oHHo...','...oeeo...','....oo....','..ooHHoo..','..oHHHHo..','...oHHo...','...oHHo...','..oHooHo..','.oHo..oHo.','.oo....oo.'],
+ tracker:['..........','..oo..oo..','.oHooooHo.','oHHeeHHHHo','oHHHHHHHHo','.oHHHHHHo.','..oHHHHo..','.oHHHHHHo.','oHoHooHoHo','oo.oooo.oo','..........'],
+ boneguard:['...oooo...','..ohhhho..','..oeeHHo..','...ohho...','oo.oooo.oo','ohohohohho','ohohohohho','oo.ohho.oo','...o..o...','..oh..ho..','..oo..oo..'],
+ wraith:['....oo....','...oHHo...','..oHHHHo..','..oHeeHo..','.oHHHHHHo.','oHhHHHHhHo','oHHHHHHHHo','.oHHHHHHo.','..oHHHHo..','...oHHo...','....oo....'],
+ cavefang:['o........o','oH......Ho','.oHooooHo.','..oHeeHo..','.oHHHHHHo.','oHHhhhhHHo','oHoHHHHoHo','oo.oHHo.oo','..oHoHo...','.oo...oo..','..........'],
+ spitter:['..........','...oooo...','..oHHHHo..','.oHHHHHHo.','oHHeeHHHHo','oHHHhhHHHo','.oHheehHo.','..oHHHHo..','.oHHHHHHo.','oHo.oo.oHo','oo......oo'],
+ sentinel:['..oooooo..','..ohhhho..','..oHeeHo..','..oooooo..','oooHHHHooo','oHohhhoHHo','oHoHoHoHHo','ooohhhoooo','..oHooHo..','..oHooHo..','..ooo.ooo.'],
+ runecaster:['....o.....','...oHo....','..oHHHo...','..oHeeo..o','...ooo...h','.ooHHoo..h','oHoheHo..o','oHoHHHoooo','..oHHHHo.o','.oHHHHHHo.','oooooooooo'],
+ slag:['.ooo..ooo.','oHhHooHhHo','oHHHHHHHHo','.oHeeeHHo.','ooHHHHHHoo','oHheHHehHo','oHHHhhHHHo','ooHHHHHHoo','..oHooHo..','.oHHo.oHHo','.oooo.oooo'],
+ cinder:['..........','.......o..','..oo..oHo.','.oHeooHHo.','oHHHHHHHHo','oHHheHHHHo','.oHHHHHHo.','..oHHHHo..','.oo.oo.oo.','oo......oo','..........'],
+ templar:['...oooo...','..oHHHHo..','..ohheHo..','...oooo...','ooohhhhooo','oHHhehHHHo','oHHhehHHHo','ooohhhhooo','..oHHHHo..','..oHooHo..','..ooo.ooo.'],
+ oracle:['...o..o...','..oHooHo..','..oHHHHo..','..oheeh..o','...oooo..h','..oHHHHo.h','.oHHhHHHo.','oHHhehHHHo','.oHHhHHHo.','..oHHHHo..','...oooo...'],
+ mycelium:['...oooo...','.ooHHHHoo.','oHHhHHhHHo','oooooooooo','..oHeeHo..','ooHHHHHHoo','oHhHHHHhHo','oHHHHHHHHo','ooohhhhooo','..oHooHo..','..ooo.ooo.'],
+ sporeling:['..........','..oooooo..','.oHhHHhHo.','oHHHHHHHHo','oooooooooo','...oeeo...','..oHHHHo..','..oHHHHo..','...oHHo...','..oo..oo..','..........'],
+ frostfang:['..........','.o...o....','.oHooHo...','oHeeHHoooo','oHHHHHHHHo','.oHHHHHHo.','..oHHHHo..','..oHooHo..','.oo.oo.oo.','..........','..........'],
+ icecaller:['....o.....','...oho....','..ohHho..o','..oHeeo.oh','...ooo...h','..ohHHoooh','.oHhHHHHo.','.oHHhHHHo.','oHHhHHHHHo','oHhHHHHhHo','oooooooooo'],
+ voidstalker:['o........o','.o......o.','..o.oo.o..','..ooHeoo..','.oHHeeHHo.','oHoHHHHoHo','o..oHHo..o','..oHHHHo..','.oHo..oHo.','oo......oo','..........'],
+ riftspawn:['..o....o..','.oHo..oHo.','oHHooooHHo','oHHeeeHHHo','.oHHhHHHo.','..ohehHo..','.oHHhHHHo.','oHoHHHHoHo','o..oHHo..o','..oHooHo..','..oo..oo..']
+};
+const ENEMY_COLORS={guardian:'#e6ad65',brute:'#c87961',wanderer:'#bd777d',archer:'#91ab6e',ambusher:'#9282bb',coward:'#c0b58a',tracker:'#75b0b7'};
+for(const entries of Object.values(BESTIARY))for(const [id,,color] of entries)ENEMY_COLORS[id]=color;
+function enemyArtId(m){
+ return Object.hasOwn(ENEMY_ART,m.species)?m.species:Object.hasOwn(ENEMY_ART,m.role)?m.role:'wanderer';
+}
+const ENEMY_ART_CACHE=new Map();
+function enemySprite(m){
+ const id=enemyArtId(m),base=ENEMY_COLORS[id];
+ if(ENEMY_ART_CACHE.has(id))return ENEMY_ART_CACHE.get(id);
+ const palette={o:'#151820',H:base,h:tileTint(base,1.35),e:['boneguard','wraith','frostfang','icecaller','voidstalker','riftspawn'].includes(id)?'#bdf4f3':'#ffe0a3'};
+ const ops=[];
+ ENEMY_ART[id].forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+3,y+4,end-x,1]);x=end}});
+ ENEMY_ART_CACHE.set(id,ops);return ops;
+}
+function drawEnemySprite(m,px,py){
+ if(m.boss){ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}return}
+ for(const [c,x,y,w,h] of enemySprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
+}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
