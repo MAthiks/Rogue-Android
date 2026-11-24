@@ -126,6 +126,10 @@ for(const [i,id] of CLASSES_IDS.entries()){
  eq(replay.start(id),run.initialState);checks++;
  for(const [j,c] of run.commands.entries()){replay.action(c);eq(record(replay),run.trace[j+1]);checks++}
  eq(replay.snapshot(),run.finalState);eq(replay.history(),run.history);checks+=2;
+ // Les quatre graines validées constituent désormais une recette de victoire.
+ assert.equal(run.final.outcome,'victory',id+' : victoire organique attendue');
+ assert.equal(run.final.floor,30);assert.equal(replay.saveData(),null);
+ assert.equal(run.history.wins,1);assert.equal(run.history.total,1);checks+=5;
  campaigns.push(run);
  console.log(JSON.stringify({id,reason:run.reason,actions:run.commands.length,turn:run.final.turn,floor:run.final.floor,hp:run.final.hp,outcome:run.final.outcome}));
 }
