@@ -89,3 +89,11 @@ tests/
 6. GODOT-006 : éclairage, animations, mesure des performances et export Android. Critère : CI headless et recette physique, hors ligne et compatibilité du format de transfert.
 
 Une différence de règle devra être documentée et validée explicitement. Aucun changement de gameplay dans TECH-014 ; le JavaScript reste l'oracle pendant la migration.
+
+## Addendum TECH-014A/B — Contrats sans dépendance navigateur
+
+`tools/godot/simulation-contract.cjs` fournit une deuxième implémentation de référence pour préparer la traduction, sans modifier le moteur distribué. Géométrie : dimensions et grille explicites, position fournie à chaque requête, mémoire révélée retournée par copie. Combat : personnage fourni à la construction, ports explicites pour bonus d'équipement, talents, famille d'arme, posture et synergies. RNG : LCG32 et Mulberry32, graines uint32, compteurs et état distincts. Ces ports ne sont pas encore les implémentations complètes d'équipement, d'IA ou de sauvegarde.
+
+`node tests/tech014-contracts.cjs systems.json` compare ces fonctions aux sources immuables du checkpoint, pas à une copie du candidat. Couverture prévue : 120 donjons (30 étages × 4 graines), visibilité de chaque case et déplacements dans les huit directions, 600 configurations de combat × 3 profils, 512 tirages comparés. Les données exportées incluent quatre vecteurs par famille RNG, quatre cas de géométrie et 72 configurations de combat avec entrées et sorties numériques. Les valeurs de combat utilisent des ports synthétiques déclarés, non des personnages issus de campagnes réelles. Les fixtures seront produites par la CI dans l'artefact cryptgrave-godot-reference.
+
+Pour GDScript, reproduire Math.round (arrondi vers +infini à mi-entier), les décalages non signés et le modulo 2^32 ; le produit Mulberry32 doit conserver les 32 bits bas. Comparer les champs JSON et non les représentations textuelles. Ne pas utiliser le RNG Godot natif à la place des algorithmes historiques lors des tests de parité.
