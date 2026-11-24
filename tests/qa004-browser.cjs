@@ -30,6 +30,24 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.ok(await page.locator('canvas').evaluate(c=>{const b=c.getBoundingClientRect(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colors=new Set();for(let i=0;i<p.length;i+=4)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return b.width>0&&b.height>0&&colors.size>3}));
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
     await page.locator('#close').tap();
+    // GAME-005A: persisted legendary pieces, mobile inventory, and live set activation.
+    await page.evaluate(k=>{
+      const d=JSON.parse(localStorage.getItem(k));
+      const gear=(slot,name)=>({id:++d.S.serial,slot,name,rarity:5,itemLevel:12,grade:2,atk:slot==='weapon'?3:0,def:slot==='armor'?3:1,crit:0,regen:0,dodge:0,affixes:[],setId:'bastion'});
+      d.S.bag=[gear('weapon','Brise-rempart'),gear('armor','Cuirasse du Bastion'),gear('helmet','Heaume du Bastion')];
+      localStorage.setItem(k,JSON.stringify(d));
+    },key);
+    await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
+    assert.ok(await page.locator('.gear-detail').first().textContent().then(s=>s.includes('Légendaire')));
+    const ids=(await read()).S.bag.map(i=>i.id);
+    for(const id of ids)await page.locator('[data-equip="'+id+'"]').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Bastion de fer : 3/3'));
+    assert.equal((await read()).S.equip.weapon.id,ids[0]);
+    await page.locator('[data-off="helmet"]').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Bastion de fer : 2/3'));
+    assert.equal((await read()).S.equip.helmet,null);
+    await page.locator('#close').tap();await page.reload();await page.locator('#resume').tap();
+    assert.equal((await read()).S.equip.armor.id,ids[1]);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
