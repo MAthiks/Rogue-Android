@@ -193,8 +193,10 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       fixture.S.equip={weapon:null,armor:null,ring:null,helmet:null,boots:null};
       fixture.S.bag=[{id:++fixture.S.serial,slot:'weapon',family,name:'Arme de test',rarity:3,atk:1,def:0,crit:0,regen:0,dodge:0}];
       fixture.monsters=[];fixture.features=[];fixture.terrain=[];fixture.loot=[];
-      await page.evaluate(({key,fixture})=>localStorage.setItem(key,JSON.stringify(fixture)),{key,fixture});
+      // Inject after navigation: the previous document saves on visibilitychange.
+      await page.addInitScript(({key,fixture,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(fixture));sessionStorage.setItem(marker,'1')}},{key,fixture,marker:'hero-art-'+classId});
       await page.reload();await page.locator('#resume').tap();
+      assert.equal((await read()).S.classId,classId);assert.equal((await read()).S.bag[0].id,fixture.S.bag[0].id);
       const bare=await playerPixels();heroPixels.add(bare);
       if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-bare.png'});
       await page.locator('#inventory').tap();await page.locator('[data-equip="'+fixture.S.bag[0].id+'"]').tap();
@@ -214,8 +216,9 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     const species=['boneguard','wraith','cavefang','spitter','sentinel','runecaster','slag','cinder','templar','oracle','mycelium','sporeling','frostfang','icecaller','voidstalker','riftspawn'];
     const cells=[];for(let y=13;y<=17;y++)for(let x=18;x<=22;x++)if(x!==20||y!==15)cells.push({x,y});
     const mobs=[...roles.map(role=>({role})),...species.map(species=>({role:'brute',species}))].map((m,i)=>({...m,...cells[i],hp:10,maxHp:10,atk:1,color:'#bbb',kind:'Test '+i}));
+    let enemyLoad=0;
     const loadEnemies=async monsters=>{
-      await page.evaluate(({key,data})=>localStorage.setItem(key,JSON.stringify(data)),{key,data:{...enemyFixture,monsters}});
+      await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:{...enemyFixture,monsters},marker:'enemy-art-'+(++enemyLoad)});
       await page.reload();await page.locator('#resume').tap();
     };
     const enemyPixels=()=>page.locator('canvas').evaluate((c,cells)=>{
