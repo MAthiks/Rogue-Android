@@ -26,6 +26,11 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.ok(legal);await page.locator('[data-d="'+legal+'"]').tap();
     let moved=await read();assert.equal(moved.S.turn,d.S.turn+1);
     await page.locator('#wait').tap();assert.equal((await read()).S.turn,moved.S.turn+1);
+    // GAME-007A: actual canvas palette and repeat-render determinism, no saved-state change.
+    const artPixels=()=>page.locator('canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,colors=new Set();let hash=2166136261;for(let i=0;i<d.length;i+=4){colors.add(d[i]+','+d[i+1]+','+d[i+2]);for(let j=0;j<4;j++)hash=Math.imul(hash^d[i+j],16777619)}return {colors:colors.size,hash:hash>>>0}});
+    const artBefore=await artPixels(),artSave=await read();assert.ok(artBefore.colors>=8);
+    await page.reload();await page.locator('#resume').tap();assert.deepEqual(await artPixels(),artBefore);assert.deepEqual(await read(),artSave);
+    if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.screenshot({path:'art-preview/crypt-mobile.png'})}
     // Verify real canvas geometry and nonempty rendered pixels.
     assert.ok(await page.locator('canvas').evaluate(c=>{const b=c.getBoundingClientRect(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colors=new Set();for(let i=0;i<p.length;i+=4)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return b.width>0&&b.height>0&&colors.size>3}));
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
