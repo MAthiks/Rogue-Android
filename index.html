@@ -1548,9 +1548,9 @@ function enemyPhase(){
     if(m.bleed>0){m.bleed--;m.hp-=2;say(m.kind+' saigne : -2 PV');if(m.hp<=0){kill(m);continue}}
     if(m.exposed>0)m.exposed--;
     if(m.stun>0){m.stun--;delete m.aim;delete m.intent;continue}
-    const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
-    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK})){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.')}else{m.specialCD=1;say(m.kind+' retient son attaque.')}continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
     const enemyStep=(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&featureAt(x,y)?.type!=='merchant'&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y));
+    const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
+    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.')}else{m.specialCD=1;say(m.kind+' retient son attaque.')}continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
     const creature=creatureAction(m,S,monsters,{W,H,stepOK:enemyStep});
     if(creature){delete m.aim;if(creature.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.')}else m.creatureCD=1;continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
     const board={W,H,stepOK:enemyStep};const baseAction=tacticalTurn(m,S,monsters,board,contacts);const action=coordinatedAction(m,S,monsters,board,contacts,baseAction);
