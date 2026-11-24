@@ -370,6 +370,63 @@ function drawCreatureMark(m,px,py){
  else if(m.creatureSkill==='drain'){ctx.fillRect(px+7,py+9,2,4);ctx.fillRect(px+5,py+11,6,2)}
  else if(m.creatureSkill==='burst'){ctx.fillRect(px+6,py+2,4,2);ctx.fillRect(px+2,py+9,2,3);ctx.fillRect(px+12,py+9,2,3)}
 }
+// GAME-006C: seeded boss alternatives, without changing historic promotion or saves.
+const EXTENDED_BOSSES={
+ ossuary:{floor:6,name:'Morvath, le Roi ossuaire',color:'#d6c5a0',ability:'Mur d’ossements',pattern:'wall',range:3,slot:'helmet',relic:'Couronne de Morvath',def:3,atk:1},
+ mire:{floor:12,name:'Mykora, la Mère des spores',color:'#a9bf72',ability:'Floraison toxique',pattern:'diagonal',range:3,slot:'boots',relic:'Bottes de Mykora',def:2,dodge:5},
+ runes:{floor:18,name:'Asterion, le Gardien des runes',color:'#c9ad77',ability:'Lance runique',pattern:'beam',range:4,slot:'weapon',relic:'Lance d’Asterion',family:'blade',atk:5,crit:3},
+ frost:{floor:24,name:'Iskarn, le Cœur de givre',color:'#9bd7ed',ability:'Fracture glaciaire',pattern:'cross',range:3,slot:'armor',relic:'Armure d’Iskarn',def:5},
+ abyssal:{floor:30,name:'Nox, le Dévoreur du vide',color:'#c296da',ability:'Déchirure abyssale',pattern:'wings',range:4,slot:'ring',relic:'Sceau de Nox',atk:2,crit:5,regen:1,drain:true}
+};
+function selectBossVariant(all,floor,seed){
+ const entry=Object.entries(EXTENDED_BOSSES).find(([,b])=>b.floor===floor);
+ if(!entry||!Number.isInteger(seed))return all;
+ let n=(seed^Math.imul(floor,0x85ebca6b)^0x68bc21eb)>>>0;n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);n=(n^(n>>>16))>>>0;
+ if(n%100>=50)return all;
+ const [boss,b]=entry;
+ return all.map(m=>m.boss?{...m,boss,kind:b.name,color:b.color,ability:b.ability,phase:1,specialCD:0}:m);
+}
+function extendedBossAction(m,player,board,all=[]){
+ const b=EXTENDED_BOSSES[m.boss];if(!Object.hasOwn(EXTENDED_BOSSES,m.boss))return null;
+ const dist=(a,z)=>Math.max(Math.abs(a.x-z.x),Math.abs(a.y-z.y)),same=(a,z)=>a.x===z.x&&a.y===z.y;
+ const ray=(a,z)=>{const n=dist(a,z);let prev=a;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(z.x-a.x)*i/n),y:Math.round(a.y+(z.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y))return false;prev=p}return true};
+ const phase=m.hp*3<=m.maxHp?3:m.hp*3<=2*m.maxHp?2:1;
+ const changed=phase>(m.phase||1);m.phase=Math.max(m.phase||1,phase);
+ const cd=m.phase===1?3:2;
+ if(m.intent){const intent=m.intent;delete m.intent;m.specialCD=cd;return {type:'release',hit:intent.cells.some(p=>same(p,player))&&ray(m,player),power:intent.power,drain:!!b.drain,changed}}
+ if(m.specialCD>0){m.specialCD--;return changed?{type:'phase',changed}:null}
+ if(dist(m,player)>b.range||!ray(m,player))return changed?{type:'phase',changed}:null;
+ const dx=Math.sign(player.x-m.x),dy=Math.sign(player.y-m.y);
+ const offsets=b.pattern==='wall'?(Math.abs(player.x-m.x)>=Math.abs(player.y-m.y)?[[0,-1],[0,1]]:[[-1,0],[1,0]]):
+ b.pattern==='diagonal'?[[-1,-1],[1,1],[-1,1],[1,-1]]:
+ b.pattern==='beam'?[[-dx,-dy],[dx,dy]]:
+ b.pattern==='cross'?[[1,0],[-1,0],[0,1],[0,-1]]:
+ [[-dy,dx],[dy,-dx],[dx,dy]];
+ const cells=[{x:player.x,y:player.y}];
+ const add=(ox,oy)=>{const p={x:player.x+ox,y:player.y+oy};if(!same(p,m)&&!cells.some(z=>same(z,p))&&board.stepOK(p.x,p.y,player.x,player.y)&&ray(m,p))cells.push(p)};
+ // Phase one uses two peripheral cells at most, later phases extend the pattern.
+ for(const [ox,oy] of offsets.slice(0,m.phase===1?2:offsets.length))add(ox,oy);
+ if(m.phase===3&&b.pattern==='beam'){add(-dy,dx);add(dy,-dx)}
+ const escapes=[];
+ for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)if(x||y){
+   const p={x:player.x+x,y:player.y+y};
+   if(board.stepOK(p.x,p.y,player.x,player.y)&&!same(p,m)&&!all.some(z=>z.hp>0&&same(p,z)))escapes.push(p);
+ }
+ if(!escapes.length)return changed?{type:'phase',changed}:null;
+ if(!escapes.some(p=>!cells.some(z=>same(z,p)))){
+   const safe=escapes[0],i=cells.findIndex(p=>same(p,safe));if(i>0)cells.splice(i,1);
+ }
+ m.intent={cells,power:m.phase+1};
+ return {type:'announce',changed};
+}
+function extendedBossReward(m){
+ const b=EXTENDED_BOSSES[m.boss];
+ return {id:++S.serial,slot:b.slot,name:b.relic,atk:b.atk||0,def:b.def||0,crit:b.crit||0,regen:b.regen||0,dodge:b.dodge||0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,S.floor)),uniqueId:'boss-'+m.boss,...(b.family?{family:b.family}:{})};
+}
+function drawBossPhase(m,px,py){
+ if(!Object.hasOwn(EXTENDED_BOSSES,m.boss))return;
+ ctx.fillStyle='#f7e3b5';for(let i=0;i<(m.phase||1);i++)ctx.fillRect(px+3+i*4,py+13,2,2);
+}
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
@@ -451,7 +508,7 @@ function buildDungeon(W,H,floor,seed){
   }
   return {map,start,stairs,monsters,loot,rooms,seed:seed>>>0,profile:p.id,shortcuts};
 }
-function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
+function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=selectBossVariant(balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor),S.floor,seed);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
 function decorateDungeon(d,W,H,floor){
   let s=(d.seed^0x43ac91d7)>>>0;
   const rnd=n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)};
@@ -682,7 +739,7 @@ function bossReward(m){
   return {id:++S.serial,slot,name:({stone:'Cuirasse de Kharok',ash:'Lame de Syrha',veil:'Anneau de Veyl'})[m.boss],atk:slot==='weapon'?4:slot==='ring'?2:0,def:slot==='armor'?4:0,crit:slot==='ring'?6:0,regen:slot==='ring'?1:0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,S.floor)),uniqueId:'boss-'+m.boss,...(slot==='weapon'?{family:'blade'}:{})};
 }
 function eliteReward(){return item(2)}
-function kill(m){monsters=monsters.filter(x=>x!==m);S.kills++;gainXP(enemyXP(m,S.floor));if(m.boss)loot.unshift({x:m.x,y:m.y,kind:'gear',item:bossReward(m)});else if(m.rare){loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++S.serial,S.floor,4)},{x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)})}else if(m.affix)loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});else if(rand(5)===0){const gear=rand(3)===0;loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})}if(!m.boss&&!m.affix&&rand(12)===0)loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)});say(m.kind+' vaincu !')}
+function kill(m){monsters=monsters.filter(x=>x!==m);S.kills++;gainXP(enemyXP(m,S.floor));if(m.boss)loot.unshift({x:m.x,y:m.y,kind:'gear',item:Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossReward(m):bossReward(m)});else if(m.rare){loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++S.serial,S.floor,4)},{x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)})}else if(m.affix)loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});else if(rand(5)===0){const gear=rand(3)===0;loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})}if(!m.boss&&!m.affix&&rand(12)===0)loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)});say(m.kind+' vaincu !')}
 function hit(m,damage,profile=null){const critical=rand(100)<criticalChance(profile),d=outgoingDamage(m,damage,profile,critical);if(critical&&talentBonus('bleed'))m.bleed=Math.max(m.bleed||0,talentBonus('bleed'));m.hp-=d;S.boost=0;say(m.kind+' : -'+d+' PV');if(m.hp<=0)kill(m)}
 function tacticalTurn(m,player,all,board,contacts){
   const {W,H,stepOK}=board,dist=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),key=p=>p.y*W+p.x;
@@ -748,8 +805,8 @@ function enemyPhase(){
     if(m.bleed>0){m.bleed--;m.hp-=2;say(m.kind+' saigne : -2 PV');if(m.hp<=0){kill(m);continue}}
     if(m.exposed>0)m.exposed--;
     if(m.stun>0){m.stun--;delete m.aim;delete m.intent;continue}
-    const special=bossAction(m,S,{W,H,stepOK});
-    if(special){if(special.changed)say(m.kind+' entre en phase 2 !');if(special.type==='announce'){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.');continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power);else say(m.ability+' manque sa cible.');continue}}
+    const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
+    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.');continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
     const enemyStep=(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y));
     const creature=creatureAction(m,S,monsters,{W,H,stepOK:enemyStep});
     if(creature){delete m.aim;if(creature.type==='announce'){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.');continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
@@ -777,7 +834,7 @@ function activate(i){if(mode!=='game'||!overlay.classList.contains('hidden'))ret
 function useDirection(dx,dy){let i=selected;selected=null;let sk=CLASSES[S.classId].skills[i],target=null,targets=[];if(!unlocked(i)||S.cool[i]||S.res<sk[1]){update();return}if(sk[3]==='direction'){let x=S.x+dx,y=S.y+dy;if(stepOK(x,y,S.x,S.y))target=mob(x,y)}else{for(let k=1;k<=5;k++){let x=S.x+dx*k,y=S.y+dy*k;if(!clear(x,y))break;if(!stepOK(x,y,x-dx,y-dy))break;let m=mob(x,y);if(m){targets.push(m);target??=m;if(!(i===3&&S.classId==='ranger'))break}}}if(!target){say('Aucune cible dans cette direction.');update();return}S.res-=sk[1];S.cool[i]=sk[2]+1;let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(S.level/3)+2*(S.ranks[i]-1)+(i===3?4+(S.nodes.o2?2:0):0);if(S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;hit(target,damage,{skill:true,ranged:sk[3]==='ranged'});if(monsters.includes(target)){if(S.classId==='warrior'&&i===3)target.exposed=4;if(S.classId==='rogue')target.bleed=3;if(S.classId==='mage'&&i===3)target.stun=1}if(S.classId==='ranger'&&i===3)for(const m of targets.slice(1))if(monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true});finish()}
 function bandage(){if(mode!=='game'||!overlay.classList.contains('hidden')||S.bandages<1||S.hp===S.maxHp)return;selected=null;S.bandages--;let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);S.hp+=n;say('Bandage : +'+n+' PV.');finish()}
 function update(){if(!S)return;document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;weaponButton.classList.toggle('active',selected==='weapon');document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';document.querySelectorAll('[data-skill]').forEach(b=>{let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];b.textContent=s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]:'');b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());b.classList.toggle('active',selected===i)});render()}
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}drawCreatureMark(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;ctx.fillStyle='#111d28';ctx.fillRect(px+2,py+2,12,13);ctx.fillStyle=CLASSES[S.classId].color;ctx.fillRect(px+5,py+4,6,6);ctx.fillStyle='#cba76d';ctx.fillRect(px+6,py+11,4,3);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;ctx.fillStyle='#111d28';ctx.fillRect(px+2,py+2,12,13);ctx.fillStyle=CLASSES[S.classId].color;ctx.fillRect(px+5,py+4,6,6);ctx.fillStyle='#cba76d';ctx.fillRect(px+6,py+11,4,3);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
