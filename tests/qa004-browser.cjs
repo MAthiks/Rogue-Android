@@ -26,6 +26,11 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.ok(legal);await page.locator('[data-d="'+legal+'"]').tap();
     let moved=await read();assert.equal(moved.S.turn,d.S.turn+1);
     await page.locator('#wait').tap();assert.equal((await read()).S.turn,moved.S.turn+1);
+    // GAME-007A: actual canvas palette and repeat-render determinism, no saved-state change.
+    const artPixels=()=>page.locator('canvas').evaluate(c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,colors=new Set();let hash=2166136261;for(let i=0;i<d.length;i+=4){colors.add(d[i]+','+d[i+1]+','+d[i+2]);for(let j=0;j<4;j++)hash=Math.imul(hash^d[i+j],16777619)}return {colors:colors.size,hash:hash>>>0}});
+    const artBefore=await artPixels(),artSave=await read();assert.ok(artBefore.colors>=8);
+    await page.reload();await page.locator('#resume').tap();assert.deepEqual(await artPixels(),artBefore);assert.deepEqual(await read(),artSave);
+    if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.screenshot({path:'art-preview/crypt-mobile.png'})}
     // Verify real canvas geometry and nonempty rendered pixels.
     assert.ok(await page.locator('canvas').evaluate(c=>{const b=c.getBoundingClientRect(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colors=new Set();for(let i=0;i<p.length;i+=4)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return b.width>0&&b.height>0&&colors.size>3}));
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
@@ -177,6 +182,131 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.reload();assert.equal(await page.locator('#resume').count(),0);await page.locator('#startHistory').tap();
     assert.ok((await page.locator('#panel').textContent()).includes('Victoires : 1'));await page.locator('#historyBack').tap();
     await page.locator('[data-class="rogue"]').tap();assert.equal((await read()).S.floor,1);assert.equal((await read()).S.classId,'rogue');
+    // GAME-007B: actual 16px center tile, same board and gear fixtures for each hero.
+    const playerPixels=()=>page.locator('canvas').evaluate(c=>{
+      const x=Math.floor(c.width/16/2)*16,y=Math.floor(c.height/16/2)*16;
+      return Array.from(c.getContext('2d').getImageData(x,y,16,16).data).join(',');
+    });
+    const heroFixture=await read(),heroPixels=new Set();
+    for(const [classId,family] of [['warrior','axe'],['rogue','dagger'],['ranger','bow'],['mage','staff']]){
+      const fixture=JSON.parse(JSON.stringify(heroFixture));fixture.S.classId=classId;
+      fixture.S.equip={weapon:null,armor:null,ring:null,helmet:null,boots:null};
+      fixture.S.bag=[{id:++fixture.S.serial,slot:'weapon',family,name:'Arme de test',rarity:3,atk:1,def:0,crit:0,regen:0,dodge:0}];
+      fixture.monsters=[];fixture.features=[];fixture.terrain=[];fixture.loot=[];
+      // Inject after navigation: the previous document saves on visibilitychange.
+      await page.addInitScript(({key,fixture,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(fixture));sessionStorage.setItem(marker,'1')}},{key,fixture,marker:'hero-art-'+classId});
+      await page.reload();await page.locator('#resume').tap();
+      assert.equal((await read()).S.classId,classId);assert.equal((await read()).S.bag[0].id,fixture.S.bag[0].id);
+      const bare=await playerPixels();heroPixels.add(bare);
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-bare.png'});
+      await page.locator('#inventory').tap();await page.locator('[data-equip="'+fixture.S.bag[0].id+'"]').tap();
+      await page.locator('#close').tap();const equipped=await playerPixels(),saved=await read();
+      assert.notEqual(equipped,bare);assert.equal(saved.S.equip.weapon.family,family);
+      assert.equal(saved.S.turn,fixture.S.turn);assert.equal(saved.S.x,fixture.S.x);assert.equal(saved.S.y,fixture.S.y);
+      await page.reload();await page.locator('#resume').tap();
+      assert.equal(await playerPixels(),equipped);assert.deepEqual(await read(),saved);
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-equipped.png'});
+    }
+    assert.equal(heroPixels.size,4);
+    // GAME-007C: all 23 ordinary enemy identities on a controlled real canvas.
+    const enemyFixture=await read();
+    enemyFixture.S.x=20;enemyFixture.S.y=15;enemyFixture.map.fill(0);enemyFixture.seen.fill(1);
+    enemyFixture.terrain=[];enemyFixture.features=[];enemyFixture.loot=[];enemyFixture.stairs={x:30,y:25};
+    const roles=['guardian','brute','wanderer','archer','ambusher','coward','tracker'];
+    const species=['boneguard','wraith','cavefang','spitter','sentinel','runecaster','slag','cinder','templar','oracle','mycelium','sporeling','frostfang','icecaller','voidstalker','riftspawn'];
+    const cells=[];for(let y=13;y<=17;y++)for(let x=18;x<=22;x++)if(x!==20||y!==15)cells.push({x,y});
+    const mobs=[...roles.map(role=>({role})),...species.map(species=>({role:'brute',species}))].map((m,i)=>({...m,...cells[i],hp:10,maxHp:10,atk:1,color:'#bbb',kind:'Test '+i}));
+    let enemyLoad=0;
+    const loadEnemies=async monsters=>{
+      await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:{...enemyFixture,monsters},marker:'enemy-art-'+(++enemyLoad)});
+      await page.reload();await page.locator('#resume').tap();
+    };
+    const enemyPixels=()=>page.locator('canvas').evaluate((c,cells)=>{
+      const ctx=c.getContext('2d'),ox=20-Math.floor(c.width/16/2),oy=15-Math.floor(c.height/16/2);
+      return cells.map(({x,y})=>Array.from(ctx.getImageData((x-ox)*16,(y-oy)*16,16,16).data).join(','));
+    },cells.slice(0,23));
+    await loadEnemies([]);const emptyTiles=await enemyPixels();
+    await loadEnemies(mobs);const fullTiles=await enemyPixels();
+    assert.ok(fullTiles.every((v,i)=>v!==emptyTiles[i]));assert.equal((await read()).monsters.length,23);
+    const fullSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),fullTiles);assert.deepEqual(await read(),fullSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/enemies-23-mobile.png'});
+    // An undisplayed monster in explored memory must not alter the canvas.
+    const hidden={...mobs[0],x:32,y:15};await loadEnemies([...mobs,hidden]);const hiddenArt=await artPixels();
+    await loadEnemies(mobs);assert.deepEqual(await artPixels(),hiddenArt);
+    // GAME-007D: all eight bosses on the same board, phase changes and save purity.
+    const bossIds=['stone','ash','veil','ossuary','mire','runes','frost','abyssal'];
+    const bossCells=cells.slice(0,8);
+    const bossMobs=bossIds.map((boss,i)=>({...bossCells[i],boss,phase:1,hp:30,maxHp:30,atk:1,role:'guardian',elite:true,kind:boss,color:'#bbb'}));
+    await loadEnemies([]);const noBoss=await enemyPixels();
+    await loadEnemies(bossMobs);const phaseOne=await enemyPixels();
+    assert.ok(phaseOne.slice(0,8).every((v,i)=>v!==noBoss[i]));
+    assert.equal(new Set(phaseOne.slice(0,8)).size,8);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/bosses-8-mobile.png'});
+    const finalBosses=bossMobs.map((m,i)=>({...m,phase:i<3?2:3}));
+    await loadEnemies(finalBosses);const finalArt=await enemyPixels();
+    assert.ok(finalArt.slice(0,8).every((v,i)=>v!==phaseOne[i]));
+    const bossSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),finalArt);assert.deepEqual(await read(),bossSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/bosses-8-final-phases-mobile.png'});
+    await loadEnemies([...finalBosses,{...finalBosses[0],x:32,y:15}]);const hiddenBoss=await artPixels();
+    await loadEnemies(finalBosses);assert.deepEqual(await artPixels(),hiddenBoss);
+    // GAME-007E: real canvas object states and shared inventory icon.
+    const objectFixture=JSON.parse(JSON.stringify(enemyFixture));
+    objectFixture.monsters=[];objectFixture.S.bag=[{id:900,slot:'weapon',family:'axe',rarity:3,name:'Hache de test',atk:1}];objectFixture.S.serial=900;
+    const objectFeatures=[
+      {type:'door',open:false},{type:'chest',open:false},{type:'trap',spent:false},
+      {type:'merchant',merchantId:'arms',stock:[]},{type:'event',eventId:'shrine',spent:false},
+      {type:'specialRoom',roomId:'library',spent:false},{type:'secret',found:false,open:false}
+    ].map((f,i)=>({found:true,...f,...cells[i]}));
+    const objectLoot=[
+      ...['blade','axe','mace','dagger','spear','bow','staff'].map(family=>({kind:'gear',item:{slot:'weapon',family,rarity:3}})),
+      ...['heal','focus','insight','ward','smoke','toolkit'].map(consumable=>({kind:'consumable',consumable})),
+      {kind:'bandage'}
+    ].map((l,i)=>({...l,...cells[i+7]}));
+    let objectLoad=0;
+    const loadObjects=async(features,loot)=>{
+      await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:{...objectFixture,features,loot},marker:'object-art-'+(++objectLoad)});
+      await page.reload();await page.locator('#resume').tap();
+    };
+    await loadObjects([],[]);const objectEmpty=await enemyPixels();
+    await loadObjects(objectFeatures,objectLoot);const objectFull=await enemyPixels();
+    assert.ok(objectFull.slice(0,21).every((v,i)=>i===6?v===objectEmpty[i]:v!==objectEmpty[i]));
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/objects-mobile.png'});
+    await page.locator('#inventory').tap();assert.equal(await page.locator('[data-equip="900"] svg').count(),1);
+    if(process.env.ROGUE_ART_PREVIEW)await page.locator('[data-equip="900"]').screenshot({path:'art-preview/inventory-object-icon.png'});
+    await page.locator('#close').tap();
+    const changedFeatures=objectFeatures.map((f,i)=>i<3?{...f,open:true,spent:true}:f);
+    await loadObjects(changedFeatures,objectLoot);const changedArt=await enemyPixels();
+    assert.ok(changedArt.slice(0,3).every((v,i)=>v!==objectFull[i]));
+    const objectSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),changedArt);assert.deepEqual(await read(),objectSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/objects-open-mobile.png'});
+    await loadObjects(changedFeatures,[...objectLoot,{x:32,y:15,kind:'bandage'}]);const hiddenLoot=await artPixels();
+    await loadObjects(changedFeatures,objectLoot);assert.deepEqual(await artPixels(),hiddenLoot);
+    // GAME-007F: HUD values, skill icons, responsive touch geometry and cosmetic healing.
+    await page.setViewportSize({width:393,height:851});
+    const uiFixture=JSON.parse(JSON.stringify(objectFixture));uiFixture.S.hp=5;uiFixture.S.maxHp=40;uiFixture.S.bandages=3;uiFixture.monsters=[];uiFixture.features=[];uiFixture.terrain=[];uiFixture.loot=[];
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('ui-art')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('ui-art','1')}},{key,data:uiFixture});
+    await page.reload();assert.equal(await page.locator('[data-class] .class-icon').count(),4);await page.locator('#resume').tap();
+    assert.equal(await page.locator('#hudMeters [role="progressbar"]').count(),3);
+    assert.equal(await page.locator('.meter-hp [role="progressbar"]').getAttribute('aria-valuenow'),'5');
+    assert.equal(await page.locator('[data-skill] .skill-icon').count(),3);
+    const uiBefore=await read();await page.locator('#bandage').tap();
+    const uiAfter=await read();assert.ok(uiAfter.S.hp>uiBefore.S.hp);assert.equal(uiAfter.S.turn,uiBefore.S.turn+1);
+    assert.equal(await page.locator('#combatFx .fx-heal').count(),1);
+    assert.equal(await page.locator('.meter-hp [role="progressbar"]').getAttribute('aria-valuenow'),String(uiAfter.S.hp));
+    assert.equal(await page.locator('#combatFx').evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-heal-mobile.png'});
+    await page.reload();await page.locator('#resume').tap();assert.equal(await page.locator('#combatFx .fx-chip').count(),0);assert.deepEqual(await read(),uiAfter);
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('#game').evaluate(c=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      assert.equal(await page.locator('[data-d]').count(),8);
+      assert.ok(await page.locator('[data-d], #wait, #inventory, #menu, [data-skill]').evaluateAll(a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=25&&r.height>=25&&r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})));
+      assert.ok(await page.locator('#game').evaluate(c=>{const r=c.getBoundingClientRect();return r.width>0&&r.height>0}));
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-'+width+'x'+height+'.png'});
+    }
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
