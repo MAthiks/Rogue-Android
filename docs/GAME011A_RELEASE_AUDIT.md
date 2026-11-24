@@ -3,7 +3,7 @@
 ## Baseline
 - 0.10.0 publiée sur Pages : commit 76246db7809002b4af1e3c1f17a4adbe8a74b229, workflow 45378819825 (engine, chromium-mobile, pwa, pages-deploy success).
 - APK RC1 validé en CI et recette physique 8/8 déclarée par l'utilisateur, PR #45 commentaire 7129329996.
-- 77 fichiers suivis, 501 529 octets de blobs, index.html 196 631 octets, 41 fichiers de test à la baseline (incluant les deux QA004), 8 fichiers Android.
+- 77 fichiers suivis, 501 529 octets de blobs, index.html 196 631 octets, 43 fichiers de test à la baseline (dont les deux QA004), 8 fichiers Android.
 - Page publique : https://mathiks.github.io/Rogue-Android/ ; affichage final dans le navigateur utilisateur à confirmer. Le menu et les métadonnées Android portent encore RC1 ; normaliser les versions au chantier de packaging, sans prétendre à une signature de production.
 
 ## Anomalie traitée
