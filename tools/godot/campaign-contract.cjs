@@ -9,7 +9,7 @@ const inv=(kind,id,value)=>({type:'inventory',kind,id,...(value===undefined?{}:{
 function longCampaign(html,id,seed,budget=2500){
  const s=createSession(html,seed);s.start(id);
  const initialState=s.snapshot(),catalog=s.catalogs(),commands=[],trace=[record(s)];
- let reason='budget',stuck=0,lastTurn=0,pending=null;
+ let reason='budget',stuck=0,lastTurn=0,pending=null,lastProgress=0,lastKills=0,lastFloor=1;
  const blocked=new Set();
  function execute(c){
   const before=s.snapshot(),after=s.action(c);
@@ -41,12 +41,18 @@ function longCampaign(html,id,seed,budget=2500){
    }
    execute({type:'close'});pending=null;continue;
   }
-  const enemies=d.monsters.filter(m=>s.visible(m.x,m.y)).sort((a,b)=>dist(a,p)-dist(b,p)),target=enemies[0];
+  const enemies=d.monsters.filter(m=>s.visible(m.x,m.y)).sort((a,b)=>dist(a,p)-dist(b,p));
+  if(p.kills!==lastKills||p.floor!==lastFloor){lastProgress=p.turn;lastKills=p.kills;lastFloor=p.floor}
+  // Après une longue poursuite stérile, privilégier la sortie (ou le boss
+  // obligatoire). Le combat adjacent reste prioritaire.
+  const boss=d.monsters.find(m=>m.boss);
+  const pursuing=p.turn-lastProgress<45;
+  const target=pursuing?enemies[0]:enemies.find(m=>dist(m,p)===1)||enemies.find(m=>m.boss);
   const skill=catalog.CLASSES[id].skills;
   const heal=p.bar.findIndex(i=>skill[i][3]==='heal'&&!p.cool[i]&&p.res>=skill[i][1]);
   const threats=enemies.flatMap(m=>m.intent?.cells||(m.aim?[m.aim]:[]));
   const same=(a,b)=>a.x===b.x&&a.y===b.y;
-  const goal=target||d.stairs;
+  const goal=target||boss||d.stairs;
   // Éviter une oscillation entre deux cases face aux archers : une esquive
   // ordinaire doit aussi rapprocher du but ; les annonces de boss priment.
   const bossThreat=enemies.some(m=>m.boss&&m.intent?.cells.some(t=>same(t,p)));
@@ -84,7 +90,7 @@ function longCampaign(html,id,seed,budget=2500){
    if(!cmd){
     // Écarte les salles momentanément inutilisables du plan de recherche.
     const routed={...d,features:d.features.map(f=>blocked.has(f.x+','+f.y)?{...f,type:'merchant'}:f)};
-    cmd=route(routed,target||d.monsters.find(m=>m.boss)||d.stairs);
+    cmd=route(routed,goal);
     if(!cmd)cmd={type:'wait'};
    }
   }
