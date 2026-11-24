@@ -79,3 +79,23 @@ Toutes les interactions ne consomment pas nécessairement un tour. Il faut exami
 ## Limites
 
 Ce guide ne constitue pas encore un inventaire exhaustif des fonctions. Le reformatage complet du fichier monolithique et la séparation en modules sont des travaux distincts. Les commentaires ne constituent pas une preuve de non-régression ; la CI reste nécessaire.
+
+## Lecture du moteur graphique
+
+Le rendu ne doit pas modifier les règles du jeu. Il traduit l'état du moteur en opérations de dessin sur le Canvas, ou en fragments SVG pour certaines interfaces.
+
+- `render()` : centre la caméra sur le joueur, dessine les cases connues, les éléments du terrain, les intentions ennemies visibles, les escaliers, le butin, les ennemis, puis le joueur.
+- `seen` mémorise les cases découvertes ; `los()` détermine celles qui sont actuellement visibles. Ne pas confondre ces deux notions.
+- `playerSprite()`, `enemySprite()`, `bossSprite()` et `objectSprite()` : produisent des rectangles au format [couleur, x, y, largeur, hauteur], exprimés en pixels locaux.
+- `tileVariant()` : choisit une variante stable selon les coordonnées, sans intervenir dans le hasard du jeu.
+- `knownTileEdges()` : ne révèle que les frontières dont le voisin est découvert.
+- `drawBiomeTile()` : utilise un atlas de 256 × 256 pixels pour le biome courant, avec un chemin de repli par rectangles.
+- `renderCellIndex()` : construit des index temporaires par case, reconstruits lors du rendu.
+- `updateHud()` et `setHudMarkup()` : actualisent les jauges et évitent les écritures DOM redondantes.
+- `combatFx()` : produit un retour visuel temporaire ; l'animation n'est pas une mécanique de combat.
+
+### Invariants à préserver lors d'un portage vers Godot
+
+Conserver les dimensions logiques de la grille, les règles de diagonale et de visibilité, l'ordre de résolution des tours et les paramètres de génération. Les couches graphiques, le zoom et les optimisations de rendu ne doivent pas modifier ces règles. Les formats de sauvegarde et leur éventuelle migration doivent faire l'objet d'un chantier indépendant.
+
+Le portage pourra remplacer le Canvas et le DOM par des nœuds Godot adaptés, mais aucune équivalence de comportement n'est considérée comme acquise sans tests.
