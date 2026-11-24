@@ -21,6 +21,15 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       await page.locator('.crypt-start').waitFor({state:'visible'});
       assert.equal(await page.locator('.crypt-brand h1').textContent(),'CRYPTGRAVE');
       assert.equal(await page.locator('.crypt-hero svg').count(),1);
+      assert.equal(await page.locator('.crypt-class-card .class-portrait').count(),4);
+      for(const [id,hp,res,spec] of [['warrior',28,'Endurance 12','Berserker · Sentinelle'],['rogue',21,'Énergie 14','Assassin · Duelliste'],['ranger',23,'Concentration 12','Tireur · Survivant'],['mage',18,'Mana 16','Évocateur · Protecteur']]){
+        const card=page.locator('[data-class="'+id+'"]');
+        assert.equal(await card.locator('.crypt-class-hp').textContent(),'PV '+hp);
+        assert.ok((await card.locator('.crypt-class-stats').textContent()).includes(res));
+        assert.equal(await card.locator('.crypt-class-spec').textContent(),spec);
+        assert.ok(await card.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'card fits '+id);
+      }
+      if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.locator('.crypt-start .classes').scrollIntoViewIfNeeded();await page.locator('.crypt-start .classes').screenshot({path:'art-preview/class-cards-'+width+'x'+height+'.png'});await page.locator('.crypt-hero').scrollIntoViewIfNeeded()}
       assert.equal(await page.locator('[data-class]').count(),4);
       assert.ok(await page.locator('.crypt-brand h1').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'title fits');
       assert.ok(await page.locator('.crypt-start').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'no horizontal overflow');
