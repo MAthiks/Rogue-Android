@@ -83,7 +83,7 @@ function enemyPhase(){
     return true;
   }).map(m=>({x:m.x,y:m.y,source:m}));
   /* TECH-012C — Parcourt une copie de la liste : les effets de saignement peuvent retirer un ennemi pendant la phase. */
-  for(const m of [...monsters]){
+  for(const m of [...state.monsters]){
     if(state.S.dead)break;
     if(m.bleed>0){
       m.bleed--;
@@ -192,7 +192,7 @@ function canUseConsumable(id){
 }
 
 function useConsumable(id){
- if(state.mode!=='game'||!!state.overlayOpen||!canUseConsumable(id))return false;
+ if(state.mode!=='game'||state.overlayOpen||!canUseConsumable(id))return false;
  state.selected=null;state.S.pouch[id]=pouchCount(id)-1;let msg=CONSUMABLES[id].name;
  if(id==='heal'){const n=Math.min(state.S.maxHp-state.S.hp,12+Math.floor(state.S.level/3));state.S.hp+=n;combatFx('heal',n);msg+=' : +'+n+' PV'}
  else if(id==='focus'){const n=Math.min(state.S.maxRes-state.S.res,6+Math.floor(state.S.level/5));state.S.res+=n;msg+=' : +'+n+' ressource'}
