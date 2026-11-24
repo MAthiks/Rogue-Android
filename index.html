@@ -1394,8 +1394,31 @@ function tileArt(b,wall,visible,variant,edges){
  }
  TILE_ART_CACHE.set(key,ops);return ops;
 }
+// GAME-011C2: one bounded, lazy 256x256 opaque atlas for the current biome.
+// Keep the original rect path for environments without a Canvas image API.
+let tileAtlas=null,tileAtlasCtx=null,tileAtlasBiome=null;
+const tileAtlasReady=new Uint8Array(256);
 function drawBiomeTile(b,x,y,wall,visible,px,py){
- const ops=tileArt(b,wall,visible,tileVariant(x,y),knownTileEdges(x,y,wall,map,seen,W,H));
+ const variant=tileVariant(x,y),edges=knownTileEdges(x,y,wall,map,seen,W,H);
+ if(typeof ctx.drawImage==='function'&&typeof document.createElement==='function'){
+   if(!tileAtlas){
+     tileAtlas=document.createElement('canvas');tileAtlas.width=256;tileAtlas.height=256;
+     tileAtlasCtx=tileAtlas.getContext('2d');
+   }
+   if(tileAtlasCtx){
+     if(tileAtlasBiome!==b){tileAtlasBiome=b;tileAtlasReady.fill(0)}
+     const slot=(wall?128:0)+(visible?0:64)+variant*16+edges;
+     const ax=(slot%16)*T,ay=Math.floor(slot/16)*T;
+     if(!tileAtlasReady[slot]){
+       for(const [color,dx,dy,w,h] of tileArt(b,wall,visible,variant,edges)){
+         tileAtlasCtx.fillStyle=color;tileAtlasCtx.fillRect(ax+dx,ay+dy,w,h);
+       }
+       tileAtlasReady[slot]=1;
+     }
+     ctx.drawImage(tileAtlas,ax,ay,T,T,px,py,T,T);return;
+   }
+ }
+ const ops=tileArt(b,wall,visible,variant,edges);
  for(const [color,dx,dy,w,h] of ops){ctx.fillStyle=color;ctx.fillRect(px+dx,py+dy,w,h)}
 }
 function los(x,y){
@@ -1406,7 +1429,12 @@ function los(x,y){
     if(i<n&&!clear(nx,ny))return false;px=nx;py=ny;
   }return true;
 }
-function reveal(){for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(los(x,y))seen[idx(x,y)]=1}
+// GAME-011C3: only cells within the existing LOS radius can be revealed.
+function reveal(){
+ const minX=Math.max(0,Math.ceil(S.x-10)),maxX=Math.min(W-1,Math.floor(S.x+10));
+ const minY=Math.max(0,Math.ceil(S.y-10)),maxY=Math.min(H-1,Math.floor(S.y+10));
+ for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(los(x,y))seen[idx(x,y)]=1;
+}
 function stepOK(x,y,fx,fy){if(!clear(x,y))return false;let dx=x-fx,dy=y-fy;return !(dx&&dy&&(!clear(fx+dx,fy)||!clear(fx,fy+dy)))}
 function mob(x,y){return monsters.find(m=>m.hp>0&&m.x===x&&m.y===y)}
 function enemyXP(m,floor){
@@ -1795,7 +1823,20 @@ function drawEnemySprite(m,px,py){
  if(m.boss){drawBossSprite(m,px,py);return}
  for(const [c,x,y,w,h] of enemySprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){drawObject('stairs','#d4b46f',px,py)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;const [id,color]=lootArt(l);drawObject(id,color,px,py)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+// Frame-local indexes preserve the first matching entity and never survive a map mutation.
+function renderCellIndex(items){
+ const cells=new Map();
+ for(const item of items)if(Number.isInteger(item.x)&&Number.isInteger(item.y)&&inside(item.x,item.y)){
+   const k=idx(item.x,item.y);if(!cells.has(k))cells.set(k,item);
+ }
+ return cells;
+}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);
+ const terrainCells=renderCellIndex(terrain),featureCells=renderCellIndex(features),intentCells=new Set();
+ for(const m of monsters)if(m.intent)for(const p of m.intent.cells)if(Number.isInteger(p.x)&&Number.isInteger(p.y)&&inside(p.x,p.y))intentCells.add(idx(p.x,p.y));
+ ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);
+ for(let vy=Math.max(0,-oy);vy<Math.min(VIEWH,H-oy);vy++)for(let vx=Math.max(0,-ox);vx<Math.min(VIEWW,W-ox);vx++){
+ let x=vx+ox,y=vy+oy,i=idx(x,y);if(!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrainCells.get(i),px,py,visible);drawFeature(featureCells.get(i),px,py,visible);if(visible&&intentCells.has(i)){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){drawObject('stairs','#d4b46f',px,py)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;const [id,color]=lootArt(l);drawObject(id,color,px,py)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
