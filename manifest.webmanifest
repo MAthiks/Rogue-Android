@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "ROGUE — Donjons et aventures",
-  "short_name": "ROGUE",
+  "name": "CRYPTGRAVE — Donjons et aventures",
+  "short_name": "CRYPTGRAVE",
   "description": "Roguelike tactique classique en pixel art, jouable hors connexion.",
   "lang": "fr",
   "start_url": "./",
