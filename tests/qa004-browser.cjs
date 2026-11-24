@@ -234,6 +234,23 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     // An undisplayed monster in explored memory must not alter the canvas.
     const hidden={...mobs[0],x:32,y:15};await loadEnemies([...mobs,hidden]);const hiddenArt=await artPixels();
     await loadEnemies(mobs);assert.deepEqual(await artPixels(),hiddenArt);
+    // GAME-007D: all eight bosses on the same board, phase changes and save purity.
+    const bossIds=['stone','ash','veil','ossuary','mire','runes','frost','abyssal'];
+    const bossCells=cells.slice(0,8);
+    const bossMobs=bossIds.map((boss,i)=>({...bossCells[i],boss,phase:1,hp:30,maxHp:30,atk:1,role:'guardian',elite:true,kind:boss,color:'#bbb'}));
+    await loadEnemies([]);const noBoss=await enemyPixels();
+    await loadEnemies(bossMobs);const phaseOne=await enemyPixels();
+    assert.ok(phaseOne.slice(0,8).every((v,i)=>v!==noBoss[i]));
+    assert.equal(new Set(phaseOne.slice(0,8)).size,8);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/bosses-8-mobile.png'});
+    const finalBosses=bossMobs.map((m,i)=>({...m,phase:i<3?2:3}));
+    await loadEnemies(finalBosses);const finalArt=await enemyPixels();
+    assert.ok(finalArt.slice(0,8).every((v,i)=>v!==phaseOne[i]));
+    const bossSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),finalArt);assert.deepEqual(await read(),bossSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/bosses-8-final-phases-mobile.png'});
+    await loadEnemies([...finalBosses,{...finalBosses[0],x:32,y:15}]);const hiddenBoss=await artPixels();
+    await loadEnemies(finalBosses);assert.deepEqual(await artPixels(),hiddenBoss);
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
