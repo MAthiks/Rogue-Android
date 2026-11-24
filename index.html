@@ -318,6 +318,58 @@ function setSummary(){
 }
 function startMenu(){mode='start';const resume=!!localStorage.getItem(KEY);show('<h1>ROGUE <small>Android</small></h1><p>Roguelike tactique en pixel art. Mort permanente, exploration procédurale et commandes exclusivement au pavé à huit directions.</p>'+(resume?'<button class="wide" id="resume">Reprendre la partie</button>':'')+'<button class="wide" id="startopts">Options graphiques</button><h2>Nouvelle partie</h2><div class="classes">'+Object.entries(CLASSES).map(([k,c])=>`<button data-class="${k}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('')+'</div><p class="tiny">Une nouvelle partie remplace la sauvegarde précédente.</p>');document.getElementById('startopts').onclick=()=>options(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else{localStorage.removeItem(KEY);startMenu()}}}
 function newGame(id){let c=CLASSES[id];S={classId:id,x:0,y:0,hp:c.hp,maxHp:c.hp,res:c.maxRes,maxRes:c.maxRes,level:1,xp:0,points:0,floor:1,turn:0,bandages:3,atk:0,armor:0,guard:0,boost:0,cool:[0,0,0],kills:0,dead:false};migrate();selected=null;generate();mode='game';hide();say('Un nouveau destin commence · '+currentBiome().name+'.');update();save()}
+// GAME-006B: biome-specific species, independent deterministic stream.
+const BESTIARY={
+ crypt:[['boneguard','Garde ossuaire','#d1c4a1','brute','crush'],['wraith','Spectre funéraire','#9cafd0','tracker','drain']],
+ cave:[['cavefang','Croc cavernicole','#b79b78','ambusher','crush'],['spitter','Cracheur des cavernes','#9bb16b','archer','bolt']],
+ ruins:[['sentinel','Sentinelle brisée','#aaa392','brute','crush'],['runecaster','Runiste errant','#d3ae79','archer','burst']],
+ volcanic:[['slag','Golem de scories','#bd795c','brute','burst'],['cinder','Salamandre de braise','#e6a35e','tracker','bolt']],
+ sanctum:[['templar','Templier déchu','#c3b4e4','brute','crush'],['oracle','Oracle profané','#a79bdc','archer','drain']],
+ fungal:[['mycelium','Colosse mycélien','#a9be75','brute','burst'],['sporeling','Porte-spores','#c5a8d5','coward','bolt']],
+ frozen:[['frostfang','Loup des glaces','#a8d8e8','tracker','crush'],['icecaller','Sorcière du givre','#80a8dc','archer','bolt']],
+ abyss:[['voidstalker','Rôdeur abyssal','#bc84bc','ambusher','drain'],['riftspawn','Rejeton de la faille','#d49ace','tracker','burst']]
+};
+const CREATURE_POWERS={
+ crush:{name:'Frappe lourde',range:1,power:2,cd:3,ranged:false},
+ bolt:{name:'Projectile',range:4,power:1,cd:3,ranged:true},
+ drain:{name:'Drain vital',range:3,power:0,cd:3,ranged:true},
+ burst:{name:'Onde',range:2,power:1,cd:4,ranged:false}
+};
+function populateBestiary(all,biome,floor,seed){
+ if(floor<4||!Object.hasOwn(BESTIARY,biome))return all;
+ let state=(seed^Math.imul(floor,0x51ed270b)^0xe245b891)>>>0;
+ const rnd=n=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return Math.floor(state/4294967296*n)};
+ const depth=Math.max(1,Math.min(30,floor)),bonus=Math.floor((depth-1)/6);
+ return all.map(m=>{
+   if(m.boss||m.elite||m.rare||rnd(100)>=55)return m;
+   const [species,kind,color,role,skill]=BESTIARY[biome][rnd(2)];
+   const hp=5+Math.floor(depth/2)+bonus+(role==='brute'?4:role==='tracker'?1:0);
+   return {...m,species,kind,color,role,creatureSkill:skill,creatureCD:0,hp,maxHp:hp,atk:2+bonus+(role==='brute'?1:0)};
+ });
+}
+function creatureAction(m,player,all,board){
+ if(!m.species||m.boss||!Object.hasOwn(CREATURE_POWERS,m.creatureSkill))return null;
+ const skill=CREATURE_POWERS[m.creatureSkill],distance=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),same=(a,b)=>a.x===b.x&&a.y===b.y;
+ const ray=(a,b)=>{const n=distance(a,b);let prev=a;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y)||(i<n&&all.some(z=>z!==m&&z.hp>0&&same(z,p))))return false;prev=p}return true};
+ if(m.intent){const intent=m.intent;delete m.intent;m.creatureCD=skill.cd;return {type:'release',hit:distance(m,player)<=skill.range+Number(m.creatureSkill==='burst')&&intent.cells.some(p=>same(p,player))&&ray(m,player),power:skill.power,ranged:skill.ranged,drain:m.creatureSkill==='drain',name:skill.name}}
+ if(m.creatureCD>0){m.creatureCD--;return null}
+ if(distance(m,player)>skill.range||!ray(m,player))return null;
+ const cells=[{x:player.x,y:player.y}];
+ if(m.creatureSkill==='burst')for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const p={x:player.x+dx,y:player.y+dy};
+   if(!same(m,p)&&board.stepOK(p.x,p.y,player.x,player.y)&&ray(m,p))cells.push(p);
+ }
+ if(m.role==='ambusher')m.awake=true;
+ m.intent={cells,power:skill.power};return {type:'announce',name:skill.name};
+}
+function drawCreatureMark(m,px,py){
+ if(!m.species)return;
+ ctx.fillStyle='#f2dcb3';
+ if(m.creatureSkill==='crush'){ctx.fillRect(px+1,py+5,3,7);ctx.fillRect(px+12,py+5,3,7)}
+ else if(m.creatureSkill==='bolt'){ctx.fillRect(px+12,py+3,2,9);ctx.fillRect(px+10,py+3,4,2)}
+ else if(m.creatureSkill==='drain'){ctx.fillRect(px+7,py+9,2,4);ctx.fillRect(px+5,py+11,6,2)}
+ else if(m.creatureSkill==='burst'){ctx.fillRect(px+6,py+2,4,2);ctx.fillRect(px+2,py+9,2,3);ctx.fillRect(px+12,py+9,2,3)}
+}
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
@@ -399,7 +451,7 @@ function buildDungeon(W,H,floor,seed){
   }
   return {map,start,stairs,monsters,loot,rooms,seed:seed>>>0,profile:p.id,shortcuts};
 }
-function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
+function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
 function decorateDungeon(d,W,H,floor){
   let s=(d.seed^0x43ac91d7)>>>0;
   const rnd=n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)};
@@ -677,12 +729,12 @@ function tacticalTurn(m,player,all,board,contacts){
   }
   return best?{type:'move',...best.first}:wait;
 }
-function enemyAttack(m,ranged,power=0){
+function enemyAttack(m,ranged,power=0,drain=false){
   if(S.veil>0){S.veil=0;say('Attaque évitée par Disparition.');return}
   if(rand(100)<dodgeChance()){say('Attaque esquivée.');return}
   let dmg=incomingDamage(m,power,rand(2));
   if(S.shield>0){let absorbed=Math.min(dmg,S.shield);S.shield-=absorbed;dmg-=absorbed}
-  const actual=Math.min(S.hp,dmg);S.hp=Math.max(0,S.hp-dmg);if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));say(m.kind+(ranged?' te décoche une flèche : -':' te frappe : -')+dmg+' PV');if(S.hp===0)die();
+  const actual=Math.min(S.hp,dmg);S.hp=Math.max(0,S.hp-dmg);if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));say(m.kind+(ranged?(m.species?' lance un projectile : -':' te décoche une flèche : -'):' te frappe : -')+dmg+' PV');if(drain&&actual>0){const n=Math.min(2,S.res);S.res-=n;say('Drain : -'+n+' ressources.')}if(S.hp===0)die();
 }
 function enemyPhase(){
   const contacts=monsters.filter(m=>{
@@ -699,6 +751,8 @@ function enemyPhase(){
     const special=bossAction(m,S,{W,H,stepOK});
     if(special){if(special.changed)say(m.kind+' entre en phase 2 !');if(special.type==='announce'){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.');continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power);else say(m.ability+' manque sa cible.');continue}}
     const enemyStep=(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y));
+    const creature=creatureAction(m,S,monsters,{W,H,stepOK:enemyStep});
+    if(creature){delete m.aim;if(creature.type==='announce'){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.');continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
     const action=tacticalTurn(m,S,monsters,{W,H,stepOK:enemyStep},contacts);
     if(action.type==='attack')enemyAttack(m,action.ranged);
     else if(action.type==='move'){m.x=action.x;m.y=action.y}
@@ -723,7 +777,7 @@ function activate(i){if(mode!=='game'||!overlay.classList.contains('hidden'))ret
 function useDirection(dx,dy){let i=selected;selected=null;let sk=CLASSES[S.classId].skills[i],target=null,targets=[];if(!unlocked(i)||S.cool[i]||S.res<sk[1]){update();return}if(sk[3]==='direction'){let x=S.x+dx,y=S.y+dy;if(stepOK(x,y,S.x,S.y))target=mob(x,y)}else{for(let k=1;k<=5;k++){let x=S.x+dx*k,y=S.y+dy*k;if(!clear(x,y))break;if(!stepOK(x,y,x-dx,y-dy))break;let m=mob(x,y);if(m){targets.push(m);target??=m;if(!(i===3&&S.classId==='ranger'))break}}}if(!target){say('Aucune cible dans cette direction.');update();return}S.res-=sk[1];S.cool[i]=sk[2]+1;let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(S.level/3)+2*(S.ranks[i]-1)+(i===3?4+(S.nodes.o2?2:0):0);if(S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;hit(target,damage,{skill:true,ranged:sk[3]==='ranged'});if(monsters.includes(target)){if(S.classId==='warrior'&&i===3)target.exposed=4;if(S.classId==='rogue')target.bleed=3;if(S.classId==='mage'&&i===3)target.stun=1}if(S.classId==='ranger'&&i===3)for(const m of targets.slice(1))if(monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true});finish()}
 function bandage(){if(mode!=='game'||!overlay.classList.contains('hidden')||S.bandages<1||S.hp===S.maxHp)return;selected=null;S.bandages--;let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);S.hp+=n;say('Bandage : +'+n+' PV.');finish()}
 function update(){if(!S)return;document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;weaponButton.classList.toggle('active',selected==='weapon');document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';document.querySelectorAll('[data-skill]').forEach(b=>{let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];b.textContent=s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]:'');b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());b.classList.toggle('active',selected===i)});render()}
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;ctx.fillStyle='#111d28';ctx.fillRect(px+2,py+2,12,13);ctx.fillStyle=CLASSES[S.classId].color;ctx.fillRect(px+5,py+4,6,6);ctx.fillStyle='#cba76d';ctx.fillRect(px+6,py+11,4,3);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}drawCreatureMark(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;ctx.fillStyle='#111d28';ctx.fillRect(px+2,py+2,12,13);ctx.fillStyle=CLASSES[S.classId].color;ctx.fillRect(px+5,py+4,6,6);ctx.fillStyle='#cba76d';ctx.fillRect(px+6,py+11,4,3);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];

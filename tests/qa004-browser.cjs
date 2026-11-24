@@ -122,6 +122,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.reload();await page.locator('#resume').tap();
     assert.equal(await page.locator('#biomeName').textContent(),'Grottes fongiques');
     assert.equal((await read()).S.hp,28);
+    // GAME-006B: a creature telegraphs, persists across reload, then misses a sidestep.
+    const fixture8=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=5;d.S.y=6;d.S.hp=30;d.S.maxHp=50;d.S.dungeon.biome='cave';d.features=[];d.terrain=[];d.loot=[];for(let y=4;y<=10;y++)for(let x=4;x<=10;x++)d.map[y*48+x]=0;d.stairs={x:15,y:15};d.monsters=[{x:8,y:6,hp:12,maxHp:12,atk:3,role:'archer',kind:'Cracheur des cavernes',color:'#9bb16b',species:'spitter',creatureSkill:'bolt',creatureCD:0}];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-8')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-8','1')}},{key,data:fixture8});
+    await page.reload();await page.locator('#resume').tap();
+    await page.locator('[data-d="1,0"]').tap();
+    let warned=await read();assert.equal(warned.S.hp,30);assert.deepEqual(warned.monsters[0].intent.cells,[{x:6,y:6}]);
+    await page.reload();await page.locator('#resume').tap();
+    assert.equal((await read()).monsters[0].species,'spitter');
+    await page.locator('[data-d="0,1"]').tap();
+    let avoided=await read();assert.equal(avoided.S.hp,30);assert.equal(avoided.S.y,7);assert.equal(avoided.monsters[0].intent,undefined);assert.equal(avoided.monsters[0].creatureCD,3);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
