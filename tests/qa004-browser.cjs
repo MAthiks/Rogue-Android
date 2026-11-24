@@ -193,8 +193,10 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       fixture.S.equip={weapon:null,armor:null,ring:null,helmet:null,boots:null};
       fixture.S.bag=[{id:++fixture.S.serial,slot:'weapon',family,name:'Arme de test',rarity:3,atk:1,def:0,crit:0,regen:0,dodge:0}];
       fixture.monsters=[];fixture.features=[];fixture.terrain=[];fixture.loot=[];
-      await page.evaluate(({key,fixture})=>localStorage.setItem(key,JSON.stringify(fixture)),{key,fixture});
+      // Inject after navigation: the previous document saves on visibilitychange.
+      await page.addInitScript(({key,fixture,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(fixture));sessionStorage.setItem(marker,'1')}},{key,fixture,marker:'hero-art-'+classId});
       await page.reload();await page.locator('#resume').tap();
+      assert.equal((await read()).S.classId,classId);assert.equal((await read()).S.bag[0].id,fixture.S.bag[0].id);
       const bare=await playerPixels();heroPixels.add(bare);
       if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-bare.png'});
       await page.locator('#inventory').tap();await page.locator('[data-equip="'+fixture.S.bag[0].id+'"]').tap();
