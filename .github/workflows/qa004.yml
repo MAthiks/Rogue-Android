@@ -37,6 +37,8 @@ jobs:
         run: |
           git show e8f7796d2a30aec0901d90a02f2b46ae630220ba:index.html > /tmp/cryptgrave-090.html
           node tests/game008e3.cjs /tmp/cryptgrave-090.html
+      - name: Verify illustrated class cards
+        run: node tests/game009b.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
