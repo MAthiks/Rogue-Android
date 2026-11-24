@@ -133,4 +133,54 @@ function talents(s,c){
  function synergyDuration(kind,m){if(kind==='exposed')return hasSynergy('rend')?6:4;if(kind==='bleed')return hasSynergy('hemorrhage')?5:3;if(kind==='stun')return hasSynergy('overload')&&!m.boss?2:1;return 0}
  return {canLearnAdvanced,learnAdvanced,talentBonus,canLearnSynergy,learnSynergy,hasSynergy,synergyDamage,synergyHeal,synergyGuard,synergyShield,synergyDuration};
 }
-module.exports={enemyXP,balanceEnemies,healingLeft,bandageValue,gainXP,migrate,rarityOf,rollRarity,items,goldBalance,goldReward,gearPrice,salePrice,merchantStock,talents};
+// Transactions d'inventaire indépendantes des widgets. Les identifiants sont
+// validés avant mutation ; les valeurs absentes ne créent jamais de nouveaux slots.
+// La confirmation de suppression/spécialisation appartient à la présentation.
+function inventoryAction(s,c,command){
+ const {kind,id,value}=command,unlocked=i=>Number.isInteger(i)&&i>=0&&i<=4&&(i<3||!!s.activeTalents[i]);
+ if(kind==='equip'){
+  const i=s.bag.findIndex(it=>it.id===id);if(i<0)return false;
+  const it=s.bag[i];if(!Object.hasOwn(c.GEAR_SLOTS,it.slot))return false;
+  s.bag.splice(i,1);if(s.equip[it.slot])s.bag.push(s.equip[it.slot]);s.equip[it.slot]=it;return true;
+ }
+ if(kind==='off'){
+  if(!Object.hasOwn(c.GEAR_SLOTS,id)||!s.equip[id]||s.bag.length>=24)return false;
+  s.bag.push(s.equip[id]);s.equip[id]=null;return true;
+ }
+ if(kind==='drop'){
+  if(!s.bag.some(it=>it.id===id))return false;
+  s.bag=s.bag.filter(it=>it.id!==id);return true;
+ }
+ if(kind==='spec'){
+  if(s.level<5||s.spec||!['offense','defense'].includes(id))return false;
+  s.spec=id;return true;
+ }
+ if(kind==='style'){
+  if(!Object.hasOwn(c.STYLES,id))return false;s.combatStyle=id;return true;
+ }
+ if(kind==='attr'){
+  if(!Number.isInteger(id)||id<0||id>=6||!s.ap)return false;
+  s.ap--;s.attrs[id]++;if(id===2){s.maxHp+=2;s.hp+=2}if(id===3){s.maxRes++;s.res++}return true;
+ }
+ if(kind==='rank'){
+  if(!unlocked(id)||!s.points||s.ranks[id]>=5||s.level<s.ranks[id]*2)return false;
+  s.points--;s.ranks[id]++;return true;
+ }
+ if(kind==='node'){
+  const nodes=[['o1',2,[]],['o2',5,['o1']],['d1',2,[]],['d2',5,['d1']],['master',10,['o2','d2']]];
+  const n=nodes[id];if(!Number.isInteger(id)||!n||!s.points||s.nodes[n[0]]||s.level<n[1]||!n[2].every(k=>s.nodes[k]))return false;
+  s.points--;s.nodes[n[0]]=true;return true;
+ }
+ if(kind==='learn'){
+  if(![3,4].includes(id)||unlocked(id)||!s.points||s.level<(id===3?5:8)||!s.nodes[id===3?'o1':'d1'])return false;
+  s.points--;s.activeTalents[id]=true;return true;
+ }
+ if(kind==='bar'){
+  if(!Number.isInteger(id)||id<0||id>2||!unlocked(value))return false;
+  const other=s.bar.indexOf(value);if(other>=0)s.bar[other]=s.bar[id];s.bar[id]=value;return true;
+ }
+ if(kind==='advanced')return talents(s,c).learnAdvanced(id);
+ if(kind==='synergy')return talents(s,c).learnSynergy(id);
+ return false;
+}
+module.exports={inventoryAction,enemyXP,balanceEnemies,healingLeft,bandageValue,gainXP,migrate,rarityOf,rollRarity,items,goldBalance,goldReward,gearPrice,salePrice,merchantStock,talents};
