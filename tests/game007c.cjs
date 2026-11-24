@@ -30,9 +30,9 @@ function testEnemyArt007C(newHtml){
       for(const [c,x,y,w,h] of ops)assert(/^#[0-9a-f]{6}$/i.test(c)&&[x,y,w,h].every(Number.isInteger)&&x>=0&&y>=4&&w>0&&h>0&&x+w<=16&&y+h<=16,'pixel bounds and HP space');
       colors.add(JSON.stringify(ops));variants++;
     }
-    assert(colors.size===4&&base.length>0,'rare palettes distinct');
+    assert(colors.size===7&&base.length>0,'rare palettes distinct');
   }
-  assert(shapes.size===23&&g.ENEMY_ART_CACHE.size===92,'distinct silhouettes and bounded cache');
+  assert(shapes.size===23&&g.ENEMY_ART_CACHE.size===161,'distinct silhouettes and bounded cache');
   assert(g.enemyArtId({role:'unknown',species:'unknown'})==='wanderer','legacy fallback');
   g.newGame('warrior');const st=g.state();st.map.fill(0);st.seen.fill(1);st.S.x=20;st.S.y=15;st.monsters.splice(0);st.loot.splice(0);st.features.splice(0);st.terrain.splice(0);
   const m={x:32,y:15,hp:9,maxHp:9,role:'brute',species:'slag',color:'#bd795c'};

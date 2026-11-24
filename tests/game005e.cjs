@@ -26,7 +26,7 @@ function testExploration(newHtml){
     for(const f of e.events){assert(!used.has(f.x+','+f.y)&&deco.map[f.y*48+f.x]===0,'no overlap');used.add(f.x+','+f.y);assert(g.EXPLORATION_EVENTS[f.eventId].min<=floor,'depth gate');kinds.add(f.eventId);events++}
     if(e.rare){const original=mobs.find(m=>m.x===e.rare.x&&m.y===e.rare.y);assert(floor>=3&&original&&!original.elite&&!original.boss&&e.rare.maxHp>original.maxHp,'rare promotion');rares.add(e.rare.rare);encounters++}
   }
-  assert(kinds.size===5&&rares.size===3&&encounters>30,'catalog coverage');
+  assert(kinds.size===10&&rares.size===6&&encounters>30,'catalog coverage');
   d.monsters.splice(0);d.features.splice(0);d.terrain.splice(0);d.loot.splice(0);
   d.map.fill(1);for(let y=4;y<=15;y++)for(let x=4;x<=15;x++)d.map[y*48+x]=0;
   s.x=6;s.y=6;d.stairs.x=15;d.stairs.y=15;s.level=12;s.floor=12;s.maxHp=100;s.hp=30;s.maxRes=30;s.res=10;s.bandages=5;

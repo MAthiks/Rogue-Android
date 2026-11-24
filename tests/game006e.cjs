@@ -30,7 +30,7 @@ function testRooms006E(newHtml){
       else {regular++;assert(!deco.features.some(x=>x.x===f.x&&x.y===f.y),'no feature overlap');for(let y=-1;y<=1;y++)for(let x=-1;x<=1;x++)assert(deco.map[(f.y+y)*48+f.x+x]===0,'nonblocking')}
     }
   }
-  assert(Object.keys(counts).length===5&&regular>350&&hidden>0,'coverage');
+  assert(Object.keys(counts).length===8&&regular>350&&hidden>0,'coverage');
   const d=g.state();d.monsters.splice(0);d.terrain.splice(0);d.features.splice(0);d.loot.splice(0);d.map.fill(1);
   for(let y=4;y<=15;y++)for(let x=4;x<=15;x++)d.map[y*48+x]=0;
   d.S.x=6;d.S.y=6;d.S.floor=10;d.S.maxHp=50;d.S.hp=20;d.S.maxRes=30;d.S.res=10;d.stairs.x=15;d.stairs.y=15;g.resume();

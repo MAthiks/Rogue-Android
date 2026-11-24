@@ -26,7 +26,7 @@ function testObjectArt007E(newHtml){
       variants+=2;
     }
   }
-  assert(Object.keys(g.OBJECT_ART).length===38&&g.OBJECT_ART_CACHE.size<=256,'bounded cache');
+  assert(Object.keys(g.OBJECT_ART).length===46&&g.OBJECT_ART_CACHE.size<=256,'bounded cache');
   for(const family of Object.keys(g.WEAPONS))for(let rarity=1;rarity<=5;rarity++){
     const it={slot:'weapon',family,rarity};const [id,color]=g.lootArt({kind:'gear',item:it});assert(id===family&&color===colors[rarity-1],'weapon rarity');
   }
@@ -47,6 +47,6 @@ function testObjectArt007E(newHtml){
   l.x=22;f.found=true;g.draws.length=0;g.render();assert(JSON.stringify(g.draws)!==empty,'visible objects');
   const before=JSON.stringify(g.state());g.render();assert(JSON.stringify(g.state())===before,'pure render');
   g.save();assert(g.restore()&&g.state().loot[0].consumable==='heal'&&g.state().features[0].found,'save compatibility');
-  return {patterns:38,variants,consumables:consumables.size,cache:g.OBJECT_ART_CACHE.size,fog:'passed',state:'unchanged'};
+  return {patterns:46,variants,consumables:consumables.size,cache:g.OBJECT_ART_CACHE.size,fog:'passed',state:'unchanged'};
 }
 console.log(testObjectArt007E(fs.readFileSync(path.join(__dirname,'../index.html'),'utf8')));
