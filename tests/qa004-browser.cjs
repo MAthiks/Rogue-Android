@@ -208,6 +208,32 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-equipped.png'});
     }
     assert.equal(heroPixels.size,4);
+    // GAME-007C: all 23 ordinary enemy identities on a controlled real canvas.
+    const enemyFixture=await read();
+    enemyFixture.S.x=20;enemyFixture.S.y=15;enemyFixture.map.fill(0);enemyFixture.seen.fill(1);
+    enemyFixture.terrain=[];enemyFixture.features=[];enemyFixture.loot=[];enemyFixture.stairs={x:30,y:25};
+    const roles=['guardian','brute','wanderer','archer','ambusher','coward','tracker'];
+    const species=['boneguard','wraith','cavefang','spitter','sentinel','runecaster','slag','cinder','templar','oracle','mycelium','sporeling','frostfang','icecaller','voidstalker','riftspawn'];
+    const cells=[];for(let y=13;y<=17;y++)for(let x=18;x<=22;x++)if(x!==20||y!==15)cells.push({x,y});
+    const mobs=[...roles.map(role=>({role})),...species.map(species=>({role:'brute',species}))].map((m,i)=>({...m,...cells[i],hp:10,maxHp:10,atk:1,color:'#bbb',kind:'Test '+i}));
+    let enemyLoad=0;
+    const loadEnemies=async monsters=>{
+      await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:{...enemyFixture,monsters},marker:'enemy-art-'+(++enemyLoad)});
+      await page.reload();await page.locator('#resume').tap();
+    };
+    const enemyPixels=()=>page.locator('canvas').evaluate((c,cells)=>{
+      const ctx=c.getContext('2d'),ox=20-Math.floor(c.width/16/2),oy=15-Math.floor(c.height/16/2);
+      return cells.map(({x,y})=>Array.from(ctx.getImageData((x-ox)*16,(y-oy)*16,16,16).data).join(','));
+    },cells.slice(0,23));
+    await loadEnemies([]);const emptyTiles=await enemyPixels();
+    await loadEnemies(mobs);const fullTiles=await enemyPixels();
+    assert.ok(fullTiles.every((v,i)=>v!==emptyTiles[i]));assert.equal((await read()).monsters.length,23);
+    const fullSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),fullTiles);assert.deepEqual(await read(),fullSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/enemies-23-mobile.png'});
+    // An undisplayed monster in explored memory must not alter the canvas.
+    const hidden={...mobs[0],x:32,y:15};await loadEnemies([...mobs,hidden]);const hiddenArt=await artPixels();
+    await loadEnemies(mobs);assert.deepEqual(await artPixels(),hiddenArt);
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
