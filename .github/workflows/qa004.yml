@@ -45,6 +45,8 @@ jobs:
         run: node tests/game009d.cjs
       - name: Verify dungeon HUD and journal
         run: node tests/game009e.cjs
+      - name: Verify class specialization doctrines
+        run: node tests/game010a.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
