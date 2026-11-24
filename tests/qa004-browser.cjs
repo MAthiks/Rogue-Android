@@ -15,6 +15,24 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     const url='http://127.0.0.1:'+server.address().port;
     const read=()=>page.evaluate(k=>JSON.parse(localStorage.getItem(k)),key);
     await page.goto(url);
+    // GAME-009A: actual title screen geometry and controls at three mobile sizes.
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('.crypt-start').waitFor({state:'visible'});
+      assert.equal(await page.locator('.crypt-brand h1').textContent(),'CRYPTGRAVE');
+      assert.equal(await page.locator('.crypt-hero svg').count(),1);
+      assert.equal(await page.locator('[data-class]').count(),4);
+      assert.ok(await page.locator('.crypt-brand h1').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'title fits');
+      assert.ok(await page.locator('.crypt-start').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'no horizontal overflow');
+      if(process.env.ROGUE_ART_PREVIEW){fs.mkdirSync('art-preview',{recursive:true});await page.screenshot({path:'art-preview/title-'+width+'x'+height+'.png'})}
+      for(const selector of ['#startHistory','#startopts','#startTransfer','[data-class="mage"]']){
+        const button=page.locator(selector);await button.scrollIntoViewIfNeeded();
+        assert.ok(await button.isVisible(),'menu action reachable '+selector);
+      }
+      await page.locator('#startopts').tap();await page.locator('#optback').tap();
+      await page.locator('#startTransfer').tap();await page.locator('#transferBack').tap();
+    }
+    await page.setViewportSize({width:393,height:851});
     assert.equal(await page.locator('[data-class]').count(),4);
     await page.locator('[data-class="warrior"]').tap();
     let d=await read();assert.equal(d.S.floor,1);
