@@ -12,8 +12,9 @@ function include(template,marker,content){
 }
 
 function assemble(){
-  const engine=include(read('src/game/engine.template.js'),
+  let engine=include(read('src/game/engine.template.js'),
     '/* @include:dungeon */',read('src/game/dungeon.js'));
+  engine=include(engine,'/* @include:geometry */',read('src/game/geometry.js'));
   let html=read('src/index.template.html');
   html=include(html,'/* @include:styles */',read('src/styles/game.css'));
   html=include(html,'/* @include:engine */',engine);
