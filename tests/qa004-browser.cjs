@@ -94,6 +94,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.equal(afterPotion.S.x,beforePotion.S.x);assert.equal(afterPotion.S.y,beforePotion.S.y);
     await page.reload();await page.locator('#resume').tap();
     assert.equal((await read()).S.pouch.heal,1);
+    // GAME-005E: approach with the pad, cancel, resolve once, and reload.
+    const fixture5=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.features=[{x:7,y:6,type:'event',eventId:'cache',found:true,spent:false}];d.monsters=[];d.terrain=[];d.loot=[];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-5')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-5','1')}},{key,data:fixture5});
+    await page.reload();await page.locator('#resume').tap();const beforeEvent=await read();
+    await page.locator('[data-d="1,0"]').tap();await page.locator('#eventBack').tap();
+    assert.equal((await read()).S.turn,beforeEvent.S.turn);
+    await page.locator('[data-d="1,0"]').tap();await page.locator('[data-event-choice="supplies"]').tap();
+    const afterEvent=await read();assert.equal(afterEvent.S.bandages,beforeEvent.S.bandages+2);assert.equal(afterEvent.S.turn,beforeEvent.S.turn+1);assert.equal(afterEvent.features[0].spent,true);assert.equal(afterEvent.S.x,6);
+    await page.reload();await page.locator('#resume').tap();await page.locator('[data-d="1,0"]').tap();
+    assert.equal((await read()).S.x,7);assert.equal((await read()).S.bandages,afterEvent.S.bandages);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
