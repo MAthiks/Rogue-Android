@@ -1,182 +1,1599 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#11151c"><title>CRYPTGRAVE — Android</title><link rel="manifest" href="./manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="./icon.svg"><link rel="apple-touch-icon" href="./icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:#0b1017;color:#eee5d4;font:13px system-ui,sans-serif;overflow:hidden;touch-action:none}#app{height:100dvh;display:flex;flex-direction:column}header{height:39px;background:#1c2731;display:flex;align-items:center;justify-content:space-between;padding:0 10px;gap:8px}header strong{color:#e3b97d}#stats{font-size:12px;text-align:right}main{flex:1;min-height:0;display:flex;justify-content:center;align-items:center;padding:3px}canvas{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;background:#080d12}footer{background:#1c2731;min-height:156px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left))}.pad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,43px);gap:3px;flex:none}button{border:1px solid #657483;background:#344453;color:#f8edd7;border-radius:8px;touch-action:manipulation;user-select:none;cursor:pointer}button:active{background:#a37b4c}.pad button{font-size:24px;font-weight:700}.pad #wait{color:#d3ad76;background:#25313e}.right{flex:1;min-width:0;max-width:520px;display:flex;flex-direction:column;gap:5px}.skills,.tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}.skills button,.tools button{min-height:32px;font-size:11px;padding:3px 2px}.tools button{min-height:28px}.skills button.active{outline:2px solid #e9bd76;background:#77583a}.skills button:disabled{opacity:.45}#log{height:31px;overflow:hidden;color:#d9d2c3;font-size:11px;line-height:1.35}.tiny{color:#aab9c4;font-size:10px}#overlay{position:fixed;inset:0;background:#070b11ed;display:flex;align-items:center;justify-content:center;z-index:10;padding:12px;overflow:auto}#overlay.hidden{display:none}.panel{width:min(520px,100%);background:#1c2731;border:1px solid #667786;border-radius:12px;padding:17px;max-height:94dvh;overflow:auto}.panel h1{margin:0 0 6px;color:#e9c18a;font-size:23px}.panel p{color:#b9c6cc;line-height:1.5}.classes{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.classes button{min-height:74px;text-align:left;padding:9px;font-size:14px}.classes small{display:block;color:#c4cdd1;font-size:11px;margin-top:5px}.panel .wide{width:100%;padding:11px;margin-top:10px;font-size:14px}#portrait{color:#e7b477} @media(max-height:430px){footer{min-height:138px}.pad{grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,38px)}.skills button,.tools button{min-height:26px}#log{height:24px}}@media(max-width:560px){.pad{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px)}footer{gap:5px}.skills button,.tools button{font-size:10px}}@media(orientation:portrait){footer{min-height:210px;align-items:flex-end}.pad{grid-template-columns:repeat(3,45px);grid-template-rows:repeat(3,54px)}.right{gap:8px}}
-.panel{touch-action:pan-y}.panel select{background:#344453;color:#fff;padding:9px;border-radius:6px;width:100%;font-size:16px}.panel label{display:block;margin-top:12px}.pad{grid-template-columns:repeat(3,var(--padw,46px));grid-template-rows:repeat(3,var(--padh,43px))}main{overflow:hidden}canvas{object-fit:fill;flex:none}.gear-detail{display:block;font-size:11px;color:#d1d8df;margin-top:4px;line-height:1.4}.gear-row{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:6px;align-items:stretch}.gear-row .wide{text-align:left}.gear-row [data-drop]{text-align:center}.tools{grid-template-columns:repeat(3,minmax(0,1fr))}.tools button.active{outline:2px solid #e9bd76;background:#77583a}.tools button:disabled{opacity:.45}
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#11151c">
+<title>CRYPTGRAVE — Android</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes"><style>
+/* TECH-012C — Base de l'interface : dimensions, couleurs et commandes tactiles. */
+*{
+  box-sizing:border-box
+}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:#0b1017;
+  color:#eee5d4;
+  font:13px system-ui,sans-serif;
+  overflow:hidden;
+  touch-action:none
+}
+#app{
+  height:100dvh;
+  display:flex;
+  flex-direction:column
+}
+header{
+  height:39px;
+  background:#1c2731;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 10px;
+  gap:8px
+}
+header strong{
+  color:#e3b97d
+}
+#stats{
+  font-size:12px;
+  text-align:right
+}
+main{
+  flex:1;
+  min-height:0;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:3px
+}
+canvas{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  image-rendering:pixelated;
+  background:#080d12
+}
+footer{
+  background:#1c2731;
+  min-height:156px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:6px max(8px,env(safe-area-inset-right)) 6px max(8px,env(safe-area-inset-left))
+}
+.pad{
+  display:grid;
+  grid-template-columns:repeat(3,46px);
+  grid-template-rows:repeat(3,43px);
+  gap:3px;
+  flex:none
+}
+button{
+  border:1px solid #657483;
+  background:#344453;
+  color:#f8edd7;
+  border-radius:8px;
+  touch-action:manipulation;
+  user-select:none;
+  cursor:pointer
+}
+button:active{
+  background:#a37b4c
+}
+.pad button{
+  font-size:24px;
+  font-weight:700
+}
+.pad #wait{
+  color:#d3ad76;
+  background:#25313e
+}
+.right{
+  flex:1;
+  min-width:0;
+  max-width:520px;
+  display:flex;
+  flex-direction:column;
+  gap:5px
+}
+.skills,.tools{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:4px
+}
+.skills button,.tools button{
+  min-height:32px;
+  font-size:11px;
+  padding:3px 2px
+}
+.tools button{
+  min-height:28px
+}
+.skills button.active{
+  outline:2px solid #e9bd76;
+  background:#77583a
+}
+.skills button:disabled{
+  opacity:.45
+}
+#log{
+  height:31px;
+  overflow:hidden;
+  color:#d9d2c3;
+  font-size:11px;
+  line-height:1.35
+}
+.tiny{
+  color:#aab9c4;
+  font-size:10px
+}
+#overlay{
+  position:fixed;
+  inset:0;
+  background:#070b11ed;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:10;
+  padding:12px;
+  overflow:auto
+}
+#overlay.hidden{
+  display:none
+}
+.panel{
+  width:min(520px,100%);
+  background:#1c2731;
+  border:1px solid #667786;
+  border-radius:12px;
+  padding:17px;
+  max-height:94dvh;
+  overflow:auto
+}
+.panel h1{
+  margin:0 0 6px;
+  color:#e9c18a;
+  font-size:23px
+}
+.panel p{
+  color:#b9c6cc;
+  line-height:1.5
+}
+.classes{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:9px
+}
+.classes button{
+  min-height:74px;
+  text-align:left;
+  padding:9px;
+  font-size:14px
+}
+.classes small{
+  display:block;
+  color:#c4cdd1;
+  font-size:11px;
+  margin-top:5px
+}
+.panel .wide{
+  width:100%;
+  padding:11px;
+  margin-top:10px;
+  font-size:14px
+}
+#portrait{
+  color:#e7b477
+}
+@media(max-height:430px){
+  footer{
+    min-height:138px
+  }
+  .pad{
+    grid-template-columns:repeat(3,42px);
+    grid-template-rows:repeat(3,38px)
+  }
+  .skills button,.tools button{
+    min-height:26px
+  }
+  #log{
+    height:24px
+  }
+}
+@media(max-width:560px){
+  .pad{
+    grid-template-columns:repeat(3,40px);
+    grid-template-rows:repeat(3,40px)
+  }
+  footer{
+    gap:5px
+  }
+  .skills button,.tools button{
+    font-size:10px
+  }
+}
+@media(orientation:portrait){
+  footer{
+    min-height:210px;
+    align-items:flex-end
+  }
+  .pad{
+    grid-template-columns:repeat(3,45px);
+    grid-template-rows:repeat(3,54px)
+  }
+  .right{
+    gap:8px
+  }
+}
+.panel{
+  touch-action:pan-y
+}
+.panel select{
+  background:#344453;
+  color:#fff;
+  padding:9px;
+  border-radius:6px;
+  width:100%;
+  font-size:16px
+}
+.panel label{
+  display:block;
+  margin-top:12px
+}
+.pad{
+  grid-template-columns:repeat(3,var(--padw,46px));
+  grid-template-rows:repeat(3,var(--padh,43px))
+}
+main{
+  overflow:hidden
+}
+canvas{
+  object-fit:fill;
+  flex:none
+}
+.gear-detail{
+  display:block;
+  font-size:11px;
+  color:#d1d8df;
+  margin-top:4px;
+  line-height:1.4
+}
+.gear-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 64px;
+  gap:6px;
+  align-items:stretch
+}
+.gear-row .wide{
+  text-align:left
+}
+.gear-row [data-drop]{
+  text-align:center
+}
+.tools{
+  grid-template-columns:repeat(3,minmax(0,1fr))
+}
+.tools button.active{
+  outline:2px solid #e9bd76;
+  background:#77583a
+}
+.tools button:disabled{
+  opacity:.45
+}
+/* TECH-012C — Habillage du HUD, des commandes, des fenêtres et des retours de combat. */
 /* GAME-007F */
-header{height:auto;min-height:65px;flex:none;display:block;padding:5px 9px 6px;background:linear-gradient(#25282c,#14181d);border-bottom:1px solid #66583f}
-.hud-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
-header strong{color:#d8bb82;font-family:Georgia,serif;letter-spacing:.08em;font-size:14px}
-#biomeName{display:block;font:10px system-ui,sans-serif;letter-spacing:0}#stats{font-size:10px;max-width:56%;color:#e7ddc9}
-#hudMeters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:4px}
-.hud-meter{min-width:0;font-size:10px;color:#e7ddc9;line-height:1.1}
-.meter-label{display:flex;justify-content:space-between;gap:3px;white-space:nowrap}.meter-label span:first-child{overflow:hidden;text-overflow:ellipsis}
-.meter-track{height:6px;margin-top:3px;background:#090c10;border:1px solid #4f493c;overflow:hidden}.meter-fill{display:block;height:100%;background:#a64c4b}.meter-res .meter-fill{background:#5189ac}.meter-xp .meter-fill{background:#c9a15e}
-main{position:relative;background:radial-gradient(ellipse,#191b1f,#090c10 75%)}
-footer{background:linear-gradient(#22252b,#12161b);border-top:1px solid #66583f}
-button{background:linear-gradient(#363a40,#24282e);border:1px solid #6b6252;border-radius:4px;color:#f0e5cf;box-shadow:inset 0 1px #ffffff10}
-button:active{background:#735b3d;box-shadow:inset 0 0 0 1px #d4b97d}button:focus-visible{outline:2px solid #f4d58e;outline-offset:1px}
-.pad{gap:3px;padding:3px;background:#101318;border:1px solid #514737;border-radius:6px}.pad button{color:#e0c58e;background:linear-gradient(#34383b,#22262a);font-size:23px}.pad #wait{background:#393025;color:#f0cb85}
-.skills button,.tools button{font-size:10px;line-height:1.2;min-width:0;overflow-wrap:anywhere}
-.skills button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:45px}
-.skill-icon{width:16px;height:16px;flex:none;vertical-align:middle;shape-rendering:crispEdges}
-.skills button.active,.tools button.active{outline:2px solid #e6b86c;background:#51402c}button:disabled{opacity:.55}
-#log{color:#e0cdb1;background:#101318;border-left:2px solid #85704d;padding:2px 4px;height:35px}
-.panel{background:linear-gradient(#26282c,#171b20);border:1px solid #8b7551;border-radius:6px;box-shadow:0 0 0 3px #151719,0 10px 40px #0009}
-.panel h1{font-family:Georgia,serif;color:#e1bf83}.panel h2{color:#d3bb8c;font-size:16px;border-bottom:1px solid #5c503c;padding-bottom:4px}.panel p,.classes small{color:#d0c6b5}.panel select{background:#20252b;border:1px solid #8b7551;color:#eee2c9}
-.class-icon{width:32px;height:32px;vertical-align:middle;margin-right:6px;shape-rendering:crispEdges}
-#combatFx{pointer-events:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
-.fx-chip{font-size:13px;font-weight:800;background:#17181eea;border:1px solid currentColor;padding:3px 7px;animation:rogue-fx .85s ease-out forwards}
-.fx-hit{color:#ffc28d}.fx-critical{color:#ffdc77}.fx-hurt{color:#ff9390}.fx-heal{color:#98e2ae}.fx-guard{color:#a4d8ff}
-@keyframes rogue-fx{0%{opacity:1;transform:translateY(6px)}60%{opacity:1}100%{opacity:0;transform:translateY(-18px)}}
-@media(prefers-reduced-motion:reduce){.fx-chip{animation-name:rogue-fx-reduced}@keyframes rogue-fx-reduced{0%,70%{opacity:1}100%{opacity:0}}}
-@media(max-height:430px){header{min-height:56px;padding:3px 7px}#hudMeters{margin-top:2px}.skills button{min-height:32px;flex-direction:row}.skill-icon{width:13px;height:13px}#log{height:24px}.pad{padding:1px}}
-@media(max-width:340px){footer{gap:3px;padding-left:4px;padding-right:4px}.pad{padding:1px}.right{gap:3px}.skills button,.tools button{font-size:9px}}
-
+header{
+  height:auto;
+  min-height:65px;
+  flex:none;
+  display:block;
+  padding:5px 9px 6px;
+  background:linear-gradient(#25282c,#14181d);
+  border-bottom:1px solid #66583f
+}
+.hud-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px
+}
+header strong{
+  color:#d8bb82;
+  font-family:Georgia,serif;
+  letter-spacing:.08em;
+  font-size:14px
+}
+#biomeName{
+  display:block;
+  font:10px system-ui,sans-serif;
+  letter-spacing:0
+}
+#stats{
+  font-size:10px;
+  max-width:56%;
+  color:#e7ddc9
+}
+#hudMeters{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  margin-top:4px
+}
+.hud-meter{
+  min-width:0;
+  font-size:10px;
+  color:#e7ddc9;
+  line-height:1.1
+}
+.meter-label{
+  display:flex;
+  justify-content:space-between;
+  gap:3px;
+  white-space:nowrap
+}
+.meter-label span:first-child{
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+.meter-track{
+  height:6px;
+  margin-top:3px;
+  background:#090c10;
+  border:1px solid #4f493c;
+  overflow:hidden
+}
+.meter-fill{
+  display:block;
+  height:100%;
+  background:#a64c4b
+}
+.meter-res .meter-fill{
+  background:#5189ac
+}
+.meter-xp .meter-fill{
+  background:#c9a15e
+}
+main{
+  position:relative;
+  background:radial-gradient(ellipse,#191b1f,#090c10 75%)
+}
+footer{
+  background:linear-gradient(#22252b,#12161b);
+  border-top:1px solid #66583f
+}
+button{
+  background:linear-gradient(#363a40,#24282e);
+  border:1px solid #6b6252;
+  border-radius:4px;
+  color:#f0e5cf;
+  box-shadow:inset 0 1px #ffffff10
+}
+button:active{
+  background:#735b3d;
+  box-shadow:inset 0 0 0 1px #d4b97d
+}
+button:focus-visible{
+  outline:2px solid #f4d58e;
+  outline-offset:1px
+}
+.pad{
+  gap:3px;
+  padding:3px;
+  background:#101318;
+  border:1px solid #514737;
+  border-radius:6px
+}
+.pad button{
+  color:#e0c58e;
+  background:linear-gradient(#34383b,#22262a);
+  font-size:23px
+}
+.pad #wait{
+  background:#393025;
+  color:#f0cb85
+}
+.skills button,.tools button{
+  font-size:10px;
+  line-height:1.2;
+  min-width:0;
+  overflow-wrap:anywhere
+}
+.skills button{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  min-height:45px
+}
+.skill-icon{
+  width:16px;
+  height:16px;
+  flex:none;
+  vertical-align:middle;
+  shape-rendering:crispEdges
+}
+.skills button.active,.tools button.active{
+  outline:2px solid #e6b86c;
+  background:#51402c
+}
+button:disabled{
+  opacity:.55
+}
+#log{
+  color:#e0cdb1;
+  background:#101318;
+  border-left:2px solid #85704d;
+  padding:2px 4px;
+  height:35px
+}
+.panel{
+  background:linear-gradient(#26282c,#171b20);
+  border:1px solid #8b7551;
+  border-radius:6px;
+  box-shadow:0 0 0 3px #151719,0 10px 40px #0009
+}
+.panel h1{
+  font-family:Georgia,serif;
+  color:#e1bf83
+}
+.panel h2{
+  color:#d3bb8c;
+  font-size:16px;
+  border-bottom:1px solid #5c503c;
+  padding-bottom:4px
+}
+.panel p,.classes small{
+  color:#d0c6b5
+}
+.panel select{
+  background:#20252b;
+  border:1px solid #8b7551;
+  color:#eee2c9
+}
+.class-icon{
+  width:32px;
+  height:32px;
+  vertical-align:middle;
+  margin-right:6px;
+  shape-rendering:crispEdges
+}
+#combatFx{
+  pointer-events:none;
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden
+}
+.fx-chip{
+  font-size:13px;
+  font-weight:800;
+  background:#17181eea;
+  border:1px solid currentColor;
+  padding:3px 7px;
+  animation:rogue-fx .85s ease-out forwards
+}
+.fx-hit{
+  color:#ffc28d
+}
+.fx-critical{
+  color:#ffdc77
+}
+.fx-hurt{
+  color:#ff9390
+}
+.fx-heal{
+  color:#98e2ae
+}
+.fx-guard{
+  color:#a4d8ff
+}
+@keyframes rogue-fx{
+  0%{
+    opacity:1;
+    transform:translateY(6px)
+  }
+  60%{
+    opacity:1
+  }
+  100%{
+    opacity:0;
+    transform:translateY(-18px)
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .fx-chip{
+    animation-name:rogue-fx-reduced
+  }
+  @keyframes rogue-fx-reduced{
+    0%,70%{
+      opacity:1
+    }
+    100%{
+      opacity:0
+    }
+  }
+}
+@media(max-height:430px){
+  header{
+    min-height:56px;
+    padding:3px 7px
+  }
+  #hudMeters{
+    margin-top:2px
+  }
+  .skills button{
+    min-height:32px;
+    flex-direction:row
+  }
+  .skill-icon{
+    width:13px;
+    height:13px
+  }
+  #log{
+    height:24px
+  }
+  .pad{
+    padding:1px
+  }
+}
+@media(max-width:340px){
+  footer{
+    gap:3px;
+    padding-left:4px;
+    padding-right:4px
+  }
+  .pad{
+    padding:1px
+  }
+  .right{
+    gap:3px
+  }
+  .skills button,.tools button{
+    font-size:9px
+  }
+}
+/* TECH-012C — Écran titre : illustration, marque et actions principales. */
 /* GAME-009A — original CRYPTGRAVE title screen, scoped to the main menu. */
-.panel:has(.crypt-start){width:min(570px,100%);padding:0;border-color:#9c7b48;background:#131418;scrollbar-color:#725538 #171418}
-.crypt-start{isolation:isolate;color:#eee2ca}
-.crypt-hero{position:relative;overflow:hidden;aspect-ratio:16/10;min-height:176px;background:#380e19;border-bottom:1px solid #9c7b48}
-.crypt-hero svg{display:block;width:100%;height:100%;position:absolute;inset:0}
-.crypt-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#08070c88 0%,transparent 44%,transparent 70%,#131418 100%);pointer-events:none}
-.crypt-brand{position:absolute;z-index:1;top:9%;left:3%;right:3%;text-align:center;pointer-events:none}
-.crypt-brand .crypt-kicker{font:700 9px system-ui,sans-serif;letter-spacing:.32em;color:#eed0a0;text-shadow:0 1px 4px #000}
-.crypt-start .crypt-brand h1{margin:3px 0 0;font:bold clamp(28px,8vw,53px)/1 Georgia,serif;letter-spacing:.025em;color:#f5d68b;text-shadow:0 2px #8d4c26,0 4px #341c16,2px 5px 6px #000,-1px -1px #fff0b3;-webkit-text-stroke:.35px #8a5b33}
-.crypt-rule{height:2px;width:76%;margin:7px auto 0;background:linear-gradient(90deg,transparent,#d4ac6c,transparent)}
-.crypt-content{padding:2px 14px 12px}
-.crypt-start .crypt-intro{margin:0 0 7px;text-align:center;color:#cdbda6;font:italic 12px Georgia,serif;letter-spacing:.045em}
-.crypt-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
-.crypt-start button{min-width:0;min-height:40px;border-color:#80633d;background:linear-gradient(#33252a,#201b20);box-shadow:inset 0 1px #d5af6c18;color:#f0dfba}
-.crypt-start button:active{background:#70412e}
-.crypt-start .wide{margin:0;padding:8px 5px;font-size:12px;font-weight:600}
-.crypt-start #resume{grid-column:1/-1;min-height:44px;color:#1d1410;background:linear-gradient(#e4c387,#ad7e42);border-color:#e9ca90;text-shadow:0 1px #f6de9d;font-family:Georgia,serif;font-size:16px}
-.crypt-start #resume:active{background:#b58a54}
-.crypt-start h2{font:700 15px Georgia,serif;margin:10px 0 6px;text-align:center;letter-spacing:.06em;border-bottom:1px solid #5c4936}
-.crypt-start .classes{gap:5px}
-.crypt-start .classes button{min-height:59px;padding:5px 6px;display:grid;grid-template-columns:32px 1fr;align-items:center;column-gap:5px;font-size:13px;text-align:left}
-.crypt-start .classes .class-icon{grid-row:span 2;margin:0}
-.crypt-start .classes small{grid-column:2;margin:0;color:#c5b49b;font-size:10px;line-height:1.3}
-.crypt-start .crypt-foot{margin:7px 0 0;font-size:10px;color:#bfb09b;text-align:center}
-@media(max-width:340px){.crypt-content{padding:2px 9px 10px}.crypt-hero{min-height:154px}.crypt-start .wide{font-size:11px}.crypt-start .classes button{font-size:12px;grid-template-columns:27px 1fr}.crypt-start .classes .class-icon{width:27px;height:27px}}
-@media(orientation:landscape) and (max-height:600px){.panel:has(.crypt-start){width:min(820px,100%)}.crypt-start{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}.crypt-hero{aspect-ratio:auto;min-height:0;border-bottom:0;border-right:1px solid #9c7b48}.crypt-hero svg{width:100%;height:100%}.crypt-brand{top:12%}.crypt-start .crypt-brand h1{font-size:clamp(24px,5vw,44px)}.crypt-content{padding:10px}.crypt-start .classes button{min-height:53px}.crypt-start h2{margin-top:8px}.crypt-start .wide{min-height:35px}}
-
-
+.panel:has(.crypt-start){
+  width:min(570px,100%);
+  padding:0;
+  border-color:#9c7b48;
+  background:#131418;
+  scrollbar-color:#725538 #171418
+}
+.crypt-start{
+  isolation:isolate;
+  color:#eee2ca
+}
+.crypt-hero{
+  position:relative;
+  overflow:hidden;
+  aspect-ratio:16/10;
+  min-height:176px;
+  background:#380e19;
+  border-bottom:1px solid #9c7b48
+}
+.crypt-hero svg{
+  display:block;
+  width:100%;
+  height:100%;
+  position:absolute;
+  inset:0
+}
+.crypt-hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,#08070c88 0%,transparent 44%,transparent 70%,#131418 100%);
+  pointer-events:none
+}
+.crypt-brand{
+  position:absolute;
+  z-index:1;
+  top:9%;
+  left:3%;
+  right:3%;
+  text-align:center;
+  pointer-events:none
+}
+.crypt-brand .crypt-kicker{
+  font:700 9px system-ui,sans-serif;
+  letter-spacing:.32em;
+  color:#eed0a0;
+  text-shadow:0 1px 4px #000
+}
+.crypt-start .crypt-brand h1{
+  margin:3px 0 0;
+  font:bold clamp(28px,8vw,53px)/1 Georgia,serif;
+  letter-spacing:.025em;
+  color:#f5d68b;
+  text-shadow:0 2px #8d4c26,0 4px #341c16,2px 5px 6px #000,-1px -1px #fff0b3;
+  -webkit-text-stroke:.35px #8a5b33
+}
+.crypt-rule{
+  height:2px;
+  width:76%;
+  margin:7px auto 0;
+  background:linear-gradient(90deg,transparent,#d4ac6c,transparent)
+}
+.crypt-content{
+  padding:2px 14px 12px
+}
+.crypt-start .crypt-intro{
+  margin:0 0 7px;
+  text-align:center;
+  color:#cdbda6;
+  font:italic 12px Georgia,serif;
+  letter-spacing:.045em
+}
+.crypt-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:5px
+}
+.crypt-start button{
+  min-width:0;
+  min-height:40px;
+  border-color:#80633d;
+  background:linear-gradient(#33252a,#201b20);
+  box-shadow:inset 0 1px #d5af6c18;
+  color:#f0dfba
+}
+.crypt-start button:active{
+  background:#70412e
+}
+.crypt-start .wide{
+  margin:0;
+  padding:8px 5px;
+  font-size:12px;
+  font-weight:600
+}
+.crypt-start #resume{
+  grid-column:1/-1;
+  min-height:44px;
+  color:#1d1410;
+  background:linear-gradient(#e4c387,#ad7e42);
+  border-color:#e9ca90;
+  text-shadow:0 1px #f6de9d;
+  font-family:Georgia,serif;
+  font-size:16px
+}
+.crypt-start #resume:active{
+  background:#b58a54
+}
+.crypt-start h2{
+  font:700 15px Georgia,serif;
+  margin:10px 0 6px;
+  text-align:center;
+  letter-spacing:.06em;
+  border-bottom:1px solid #5c4936
+}
+.crypt-start .classes{
+  gap:5px
+}
+.crypt-start .classes button{
+  min-height:59px;
+  padding:5px 6px;
+  display:grid;
+  grid-template-columns:32px 1fr;
+  align-items:center;
+  column-gap:5px;
+  font-size:13px;
+  text-align:left
+}
+.crypt-start .classes .class-icon{
+  grid-row:span 2;
+  margin:0
+}
+.crypt-start .classes small{
+  grid-column:2;
+  margin:0;
+  color:#c5b49b;
+  font-size:10px;
+  line-height:1.3
+}
+.crypt-start .crypt-foot{
+  margin:7px 0 0;
+  font-size:10px;
+  color:#bfb09b;
+  text-align:center
+}
+@media(max-width:340px){
+  .crypt-content{
+    padding:2px 9px 10px
+  }
+  .crypt-hero{
+    min-height:154px
+  }
+  .crypt-start .wide{
+    font-size:11px
+  }
+  .crypt-start .classes button{
+    font-size:12px;
+    grid-template-columns:27px 1fr
+  }
+  .crypt-start .classes .class-icon{
+    width:27px;
+    height:27px
+  }
+}
+@media(orientation:landscape) and (max-height:600px){
+  .panel:has(.crypt-start){
+    width:min(820px,100%)
+  }
+  .crypt-start{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    align-items:stretch
+  }
+  .crypt-hero{
+    aspect-ratio:auto;
+    min-height:0;
+    border-bottom:0;
+    border-right:1px solid #9c7b48
+  }
+  .crypt-hero svg{
+    width:100%;
+    height:100%
+  }
+  .crypt-brand{
+    top:12%
+  }
+  .crypt-start .crypt-brand h1{
+    font-size:clamp(24px,5vw,44px)
+  }
+  .crypt-content{
+    padding:10px
+  }
+  .crypt-start .classes button{
+    min-height:53px
+  }
+  .crypt-start h2{
+    margin-top:8px
+  }
+  .crypt-start .wide{
+    min-height:35px
+  }
+}
+/* TECH-012C — Cartes de classes : portraits et statistiques de départ. */
 /* GAME-009B: class cards; scoped to the title screen. */
-.crypt-start .classes{gap:6px}
-.crypt-start .classes .crypt-class-card{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:5px;min-height:0;text-align:left;position:relative;overflow:hidden;background:linear-gradient(160deg,#32292d,#19191e)}
-.crypt-start .crypt-class-card .class-portrait{width:100%;height:clamp(60px,21vw,105px);display:block;object-fit:contain;border:1px solid #826740;background:#17181d}
-.crypt-start .crypt-class-head{display:flex;align-items:center;gap:3px;font:700 14px Georgia,serif;color:#eed09b}
-.crypt-start .crypt-class-head .class-icon{width:20px;height:20px;margin:0}
-.crypt-start .crypt-class-role{font:italic 11px Georgia,serif;color:#dbb98b}
-.crypt-start .crypt-class-card small{font-size:10px;line-height:1.25;min-height:25px;color:#cdbfaa}
-.crypt-class-stats{display:flex;flex-wrap:wrap;gap:3px;font-size:10px;line-height:1.2}
-.crypt-class-stats span{background:#26303a;border:1px solid #495968;padding:2px 3px;color:#cce0ec}
-.crypt-class-stats .crypt-class-hp{background:#3b2328;border-color:#74474a;color:#f2b2ac}
-.crypt-class-spec{font-size:9px;color:#d4c09c;border-top:1px solid #6a533d;padding-top:3px;line-height:1.25}
-.crypt-start .class-warrior{border-top-color:#aebac3}.crypt-start .class-rogue{border-top-color:#bf9f85}.crypt-start .class-ranger{border-top-color:#b8ba81}.crypt-start .class-mage{border-top-color:#beadd9}
-@media(orientation:landscape) and (max-height:600px){.crypt-start .classes .crypt-class-card .class-portrait{height:60px}.crypt-start .crypt-class-card small{min-height:0}}
-
+.crypt-start .classes{
+  gap:6px
+}
+.crypt-start .classes .crypt-class-card{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:3px;
+  padding:5px;
+  min-height:0;
+  text-align:left;
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(160deg,#32292d,#19191e)
+}
+.crypt-start .crypt-class-card .class-portrait{
+  width:100%;
+  height:clamp(60px,21vw,105px);
+  display:block;
+  object-fit:contain;
+  border:1px solid #826740;
+  background:#17181d
+}
+.crypt-start .crypt-class-head{
+  display:flex;
+  align-items:center;
+  gap:3px;
+  font:700 14px Georgia,serif;
+  color:#eed09b
+}
+.crypt-start .crypt-class-head .class-icon{
+  width:20px;
+  height:20px;
+  margin:0
+}
+.crypt-start .crypt-class-role{
+  font:italic 11px Georgia,serif;
+  color:#dbb98b
+}
+.crypt-start .crypt-class-card small{
+  font-size:10px;
+  line-height:1.25;
+  min-height:25px;
+  color:#cdbfaa
+}
+.crypt-class-stats{
+  display:flex;
+  flex-wrap:wrap;
+  gap:3px;
+  font-size:10px;
+  line-height:1.2
+}
+.crypt-class-stats span{
+  background:#26303a;
+  border:1px solid #495968;
+  padding:2px 3px;
+  color:#cce0ec
+}
+.crypt-class-stats .crypt-class-hp{
+  background:#3b2328;
+  border-color:#74474a;
+  color:#f2b2ac
+}
+.crypt-class-spec{
+  font-size:9px;
+  color:#d4c09c;
+  border-top:1px solid #6a533d;
+  padding-top:3px;
+  line-height:1.25
+}
+.crypt-start .class-warrior{
+  border-top-color:#aebac3
+}
+.crypt-start .class-rogue{
+  border-top-color:#bf9f85
+}
+.crypt-start .class-ranger{
+  border-top-color:#b8ba81
+}
+.crypt-start .class-mage{
+  border-top-color:#beadd9
+}
+@media(orientation:landscape) and (max-height:600px){
+  .crypt-start .classes .crypt-class-card .class-portrait{
+    height:60px
+  }
+  .crypt-start .crypt-class-card small{
+    min-height:0
+  }
+}
+/* TECH-012C — Fiche du personnage : statistiques, jauges et progression. */
 /* GAME-009C — character dossier, scoped to inventory view. */
-.panel:has(.crypt-sheet){width:min(650px,100%);border-color:#987548;padding:12px;background:linear-gradient(150deg,#30272a,#17181d 45%,#15161a);scrollbar-color:#856940 #19181c}
-.crypt-sheet{color:#e9dbc3;border:1px solid #80633d;background:linear-gradient(140deg,#302a2a,#181a20);padding:9px;position:relative;box-shadow:inset 0 0 0 3px #131419}
-.crypt-sheet .sheet-kicker{font:700 9px system-ui,sans-serif;letter-spacing:.18em;text-align:center;color:#c2a374;margin:0 0 7px}
-.crypt-sheet .sheet-top{display:grid;grid-template-columns:minmax(68px,100px) minmax(0,1fr);gap:10px;align-items:center}
-.crypt-sheet .sheet-art{border:1px solid #8c724c;background:#191b22;position:relative;padding:3px}
-.crypt-sheet .class-portrait{display:block;width:100%;height:auto}
-.crypt-sheet .sheet-sprite{position:absolute;right:3px;bottom:3px;width:34px;height:34px;background:#13171e;border:1px solid #977b54;shape-rendering:crispEdges}
-.crypt-sheet h1{font:700 25px/1.15 Georgia,serif;margin:0 0 3px;color:#f0d096}
-.crypt-sheet .sheet-spec{font:italic 12px Georgia,serif;color:#d0b58d;margin:0 0 4px}
-.crypt-sheet .sheet-meta{display:flex;flex-wrap:wrap;gap:4px;font-size:11px;margin:4px 0}
-.crypt-sheet .sheet-meta span{border:1px solid #5e4f40;padding:3px 5px;background:#17191f;color:#dec8a3}
-.crypt-sheet .sheet-meta .sheet-gold{color:#edc77d}
-.crypt-sheet .sheet-meters{display:grid;gap:4px;margin-top:8px}
-.crypt-sheet .sheet-meter-label{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#e4d5c1}
-.crypt-sheet .sheet-meter-track{height:7px;background:#0e1116;border:1px solid #62513e;margin-top:2px}
-.crypt-sheet .sheet-meter-fill{height:100%;display:block;background:#a85050}
-.crypt-sheet .sheet-meter-res .sheet-meter-fill{background:#5688a4}.crypt-sheet .sheet-meter-xp .sheet-meter-fill{background:#c4a063}
-.crypt-sheet .sheet-combat{margin:9px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
-.crypt-sheet .sheet-combat div{border:1px solid #594b3a;background:#17191e;padding:4px;text-align:center;min-width:0}
-.crypt-sheet .sheet-combat b{display:block;font:700 15px Georgia,serif;color:#e7c58c}
-.crypt-sheet .sheet-combat span{font-size:10px;color:#c4b59d}
-.panel:has(.crypt-sheet) h2{font:700 16px Georgia,serif;color:#e5c38d;border-bottom:1px solid #69543b;margin:16px 0 7px;padding-bottom:5px}
-.panel:has(.crypt-sheet) h3{font:700 13px Georgia,serif;color:#cdb58c;margin:10px 0 6px}
-.panel:has(.crypt-sheet) .classes{gap:5px}
-.panel:has(.crypt-sheet) .classes button{min-width:0;min-height:64px;background:linear-gradient(#382d2e,#242328);border-color:#755b40;overflow-wrap:anywhere}
-.panel:has(.crypt-sheet) .classes button:active{background:#735b3d}
-.panel:has(.crypt-sheet) .classes small{font-size:10px;line-height:1.3;color:#cebea5}
-.panel:has(.crypt-sheet) .sheet-attributes button{display:grid;grid-template-columns:1fr auto;align-items:center;gap:3px;padding:7px}
-.sheet-attributes .sheet-attr-name{font-size:12px;color:#ead5af;font-weight:600}
-.sheet-attributes .sheet-attr-value{font:700 19px Georgia,serif;color:#f0cb87}
-.sheet-attributes small{grid-column:1/-1;margin:0}
-.sheet-attributes .sheet-attr-up{font-size:10px;color:#accda2;grid-column:1/-1}
-.panel:has(.crypt-sheet) [data-rank]{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:7px;text-align:left;padding:8px}
-.sheet-rank-text{min-width:0;font-size:12px}.sheet-rank-text small{display:block;font-size:10px;color:#c9b798;margin-top:3px}
-.sheet-rank-dots{display:flex;gap:2px}.sheet-rank-dots i{width:7px;height:7px;border:1px solid #8b7453;background:#232328}.sheet-rank-dots i.filled{background:#d0ac68}
-.panel:has(.crypt-sheet) #close{background:linear-gradient(#c8a26a,#98703f);color:#1c1712;border-color:#d6b37a;font-weight:700}
-@media(max-width:340px){.panel:has(.crypt-sheet){padding:8px}.crypt-sheet{padding:6px}.crypt-sheet .sheet-top{grid-template-columns:72px minmax(0,1fr);gap:6px}.crypt-sheet h1{font-size:20px}.sheet-attributes .sheet-attr-name{font-size:11px}}
-
+.panel:has(.crypt-sheet){
+  width:min(650px,100%);
+  border-color:#987548;
+  padding:12px;
+  background:linear-gradient(150deg,#30272a,#17181d 45%,#15161a);
+  scrollbar-color:#856940 #19181c
+}
+.crypt-sheet{
+  color:#e9dbc3;
+  border:1px solid #80633d;
+  background:linear-gradient(140deg,#302a2a,#181a20);
+  padding:9px;
+  position:relative;
+  box-shadow:inset 0 0 0 3px #131419
+}
+.crypt-sheet .sheet-kicker{
+  font:700 9px system-ui,sans-serif;
+  letter-spacing:.18em;
+  text-align:center;
+  color:#c2a374;
+  margin:0 0 7px
+}
+.crypt-sheet .sheet-top{
+  display:grid;
+  grid-template-columns:minmax(68px,100px) minmax(0,1fr);
+  gap:10px;
+  align-items:center
+}
+.crypt-sheet .sheet-art{
+  border:1px solid #8c724c;
+  background:#191b22;
+  position:relative;
+  padding:3px
+}
+.crypt-sheet .class-portrait{
+  display:block;
+  width:100%;
+  height:auto
+}
+.crypt-sheet .sheet-sprite{
+  position:absolute;
+  right:3px;
+  bottom:3px;
+  width:34px;
+  height:34px;
+  background:#13171e;
+  border:1px solid #977b54;
+  shape-rendering:crispEdges
+}
+.crypt-sheet h1{
+  font:700 25px/1.15 Georgia,serif;
+  margin:0 0 3px;
+  color:#f0d096
+}
+.crypt-sheet .sheet-spec{
+  font:italic 12px Georgia,serif;
+  color:#d0b58d;
+  margin:0 0 4px
+}
+.crypt-sheet .sheet-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  font-size:11px;
+  margin:4px 0
+}
+.crypt-sheet .sheet-meta span{
+  border:1px solid #5e4f40;
+  padding:3px 5px;
+  background:#17191f;
+  color:#dec8a3
+}
+.crypt-sheet .sheet-meta .sheet-gold{
+  color:#edc77d
+}
+.crypt-sheet .sheet-meters{
+  display:grid;
+  gap:4px;
+  margin-top:8px
+}
+.crypt-sheet .sheet-meter-label{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  font-size:10px;
+  color:#e4d5c1
+}
+.crypt-sheet .sheet-meter-track{
+  height:7px;
+  background:#0e1116;
+  border:1px solid #62513e;
+  margin-top:2px
+}
+.crypt-sheet .sheet-meter-fill{
+  height:100%;
+  display:block;
+  background:#a85050
+}
+.crypt-sheet .sheet-meter-res .sheet-meter-fill{
+  background:#5688a4
+}
+.crypt-sheet .sheet-meter-xp .sheet-meter-fill{
+  background:#c4a063
+}
+.crypt-sheet .sheet-combat{
+  margin:9px 0 0;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:4px
+}
+.crypt-sheet .sheet-combat div{
+  border:1px solid #594b3a;
+  background:#17191e;
+  padding:4px;
+  text-align:center;
+  min-width:0
+}
+.crypt-sheet .sheet-combat b{
+  display:block;
+  font:700 15px Georgia,serif;
+  color:#e7c58c
+}
+.crypt-sheet .sheet-combat span{
+  font-size:10px;
+  color:#c4b59d
+}
+.panel:has(.crypt-sheet) h2{
+  font:700 16px Georgia,serif;
+  color:#e5c38d;
+  border-bottom:1px solid #69543b;
+  margin:16px 0 7px;
+  padding-bottom:5px
+}
+.panel:has(.crypt-sheet) h3{
+  font:700 13px Georgia,serif;
+  color:#cdb58c;
+  margin:10px 0 6px
+}
+.panel:has(.crypt-sheet) .classes{
+  gap:5px
+}
+.panel:has(.crypt-sheet) .classes button{
+  min-width:0;
+  min-height:64px;
+  background:linear-gradient(#382d2e,#242328);
+  border-color:#755b40;
+  overflow-wrap:anywhere
+}
+.panel:has(.crypt-sheet) .classes button:active{
+  background:#735b3d
+}
+.panel:has(.crypt-sheet) .classes small{
+  font-size:10px;
+  line-height:1.3;
+  color:#cebea5
+}
+.panel:has(.crypt-sheet) .sheet-attributes button{
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:3px;
+  padding:7px
+}
+.sheet-attributes .sheet-attr-name{
+  font-size:12px;
+  color:#ead5af;
+  font-weight:600
+}
+.sheet-attributes .sheet-attr-value{
+  font:700 19px Georgia,serif;
+  color:#f0cb87
+}
+.sheet-attributes small{
+  grid-column:1/-1;
+  margin:0
+}
+.sheet-attributes .sheet-attr-up{
+  font-size:10px;
+  color:#accda2;
+  grid-column:1/-1
+}
+.panel:has(.crypt-sheet) [data-rank]{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr) auto;
+  align-items:center;
+  gap:7px;
+  text-align:left;
+  padding:8px
+}
+.sheet-rank-text{
+  min-width:0;
+  font-size:12px
+}
+.sheet-rank-text small{
+  display:block;
+  font-size:10px;
+  color:#c9b798;
+  margin-top:3px
+}
+.sheet-rank-dots{
+  display:flex;
+  gap:2px
+}
+.sheet-rank-dots i{
+  width:7px;
+  height:7px;
+  border:1px solid #8b7453;
+  background:#232328
+}
+.sheet-rank-dots i.filled{
+  background:#d0ac68
+}
+.panel:has(.crypt-sheet) #close{
+  background:linear-gradient(#c8a26a,#98703f);
+  color:#1c1712;
+  border-color:#d6b37a;
+  font-weight:700
+}
+@media(max-width:340px){
+  .panel:has(.crypt-sheet){
+    padding:8px
+  }
+  .crypt-sheet{
+    padding:6px
+  }
+  .crypt-sheet .sheet-top{
+    grid-template-columns:72px minmax(0,1fr);
+    gap:6px
+  }
+  .crypt-sheet h1{
+    font-size:20px
+  }
+  .sheet-attributes .sheet-attr-name{
+    font-size:11px
+  }
+}
+/* TECH-012C — Équipement et sac : emplacements et cartes d'objets. */
 /* GAME-009D — equipped silhouette and legible item cards. */
-.crypt-gear{border:1px solid #856a46;background:linear-gradient(140deg,#2b2528,#16191f);padding:8px}
-.gear-quick{display:flex;gap:6px;margin:8px 0}.gear-quick button{flex:1;min-width:0;min-height:38px;font-size:12px;border-color:#8b6e45}
-.gear-rack{display:grid;grid-template-columns:minmax(0,1fr) minmax(64px,.8fr) minmax(0,1fr);grid-template-areas:"helmet hero ring" "weapon hero armor" ". boots .";align-items:stretch;gap:5px}
-.gear-rack .gear-hero{grid-area:hero;display:flex;align-items:center;justify-content:center;min-width:0;background:radial-gradient(ellipse,#46414a,#17191f 72%);border:1px solid #63533f;position:relative}
-.gear-hero svg{width:100%;max-width:130px;shape-rendering:crispEdges;image-rendering:pixelated}
-.gear-slot-helmet{grid-area:helmet}.gear-slot-ring{grid-area:ring}.gear-slot-weapon{grid-area:weapon}.gear-slot-armor{grid-area:armor}.gear-slot-boots{grid-area:boots}
-.crypt-gear .gear-slot{min-width:0;min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 3px;border-color:var(--gear-tone,#63533f);background:linear-gradient(#332a2e,#1e2026);overflow-wrap:anywhere}
-.crypt-gear .gear-slot svg{width:32px;height:32px;margin:0!important}
-.crypt-gear .gear-slot .slot-label{color:#e4cba0;font-size:10px;font-weight:700}
-.crypt-gear .gear-slot .slot-name{font-size:10px;color:var(--gear-tone);line-height:1.2;text-align:center}
-.crypt-gear .gear-slot small{font-size:9px;line-height:1.2;color:#baad99}
-.crypt-gear .gear-slot:disabled{opacity:.8}.crypt-gear .gear-slot.empty{opacity:.65;border-style:dashed}
-.gear-equipped-details{margin-top:7px;display:grid;gap:3px}
-.gear-equipped-details .gear-equipped-line{display:grid;grid-template-columns:58px minmax(0,1fr);gap:4px;border-top:1px solid #514536;padding:5px 0;font-size:11px}
-.gear-equipped-details .gear-equipped-line>span:first-child{color:#ddc292}
-.gear-equipped-details .gear-detail{font-size:10px}
-.crypt-bag .bag-capacity{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#d5c4aa}
-.bag-capacity-track{height:6px;background:#101217;border:1px solid #66543c;margin:4px 0 8px}.bag-capacity-track span{display:block;height:100%;background:#c2a06b}
-.crypt-bag .gear-row{grid-template-columns:minmax(0,1fr) 50px;gap:5px;margin:5px 0}
-.crypt-bag .gear-row .wide{margin:0;min-width:0;padding:7px}
-.crypt-bag .gear-item{display:grid;grid-template-columns:34px minmax(0,1fr);gap:5px;align-items:center;border-left:3px solid var(--gear-tone);background:linear-gradient(125deg,#30282e,#1e2026);text-align:left}
-.gear-item svg{width:32px;height:32px;margin:0!important}
-.gear-item .gear-item-name{font:700 12px Georgia,serif;color:var(--gear-tone);overflow-wrap:anywhere}
-.gear-item .gear-detail{font-size:10px;line-height:1.35;margin:3px 0}
-.gear-item .gear-action{display:block;color:#e0bf8e;font-size:10px;margin-top:4px}
-.crypt-bag [data-drop]{font-size:11px;color:#e5b3a9;background:#38272c;border-color:#77514a}
-.crypt-bag .bag-empty{color:#bdae99;text-align:center;padding:10px;border:1px dashed #63513d}
-@media(max-width:340px){.crypt-gear{padding:5px}.gear-rack{grid-template-columns:minmax(0,1fr) minmax(54px,.7fr) minmax(0,1fr);gap:3px}.crypt-gear .gear-slot{padding:4px 2px;min-height:76px}.crypt-gear .gear-slot svg{width:26px;height:26px}.gear-equipped-details .gear-equipped-line{grid-template-columns:48px minmax(0,1fr)}}
-
+.crypt-gear{
+  border:1px solid #856a46;
+  background:linear-gradient(140deg,#2b2528,#16191f);
+  padding:8px
+}
+.gear-quick{
+  display:flex;
+  gap:6px;
+  margin:8px 0
+}
+.gear-quick button{
+  flex:1;
+  min-width:0;
+  min-height:38px;
+  font-size:12px;
+  border-color:#8b6e45
+}
+.gear-rack{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(64px,.8fr) minmax(0,1fr);
+  grid-template-areas:"helmet hero ring" "weapon hero armor" ". boots .";
+  align-items:stretch;
+  gap:5px
+}
+.gear-rack .gear-hero{
+  grid-area:hero;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:0;
+  background:radial-gradient(ellipse,#46414a,#17191f 72%);
+  border:1px solid #63533f;
+  position:relative
+}
+.gear-hero svg{
+  width:100%;
+  max-width:130px;
+  shape-rendering:crispEdges;
+  image-rendering:pixelated
+}
+.gear-slot-helmet{
+  grid-area:helmet
+}
+.gear-slot-ring{
+  grid-area:ring
+}
+.gear-slot-weapon{
+  grid-area:weapon
+}
+.gear-slot-armor{
+  grid-area:armor
+}
+.gear-slot-boots{
+  grid-area:boots
+}
+.crypt-gear .gear-slot{
+  min-width:0;
+  min-height:86px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:5px 3px;
+  border-color:var(--gear-tone,#63533f);
+  background:linear-gradient(#332a2e,#1e2026);
+  overflow-wrap:anywhere
+}
+.crypt-gear .gear-slot svg{
+  width:32px;
+  height:32px;
+  margin:0!important
+}
+.crypt-gear .gear-slot .slot-label{
+  color:#e4cba0;
+  font-size:10px;
+  font-weight:700
+}
+.crypt-gear .gear-slot .slot-name{
+  font-size:10px;
+  color:var(--gear-tone);
+  line-height:1.2;
+  text-align:center
+}
+.crypt-gear .gear-slot small{
+  font-size:9px;
+  line-height:1.2;
+  color:#baad99
+}
+.crypt-gear .gear-slot:disabled{
+  opacity:.8
+}
+.crypt-gear .gear-slot.empty{
+  opacity:.65;
+  border-style:dashed
+}
+.gear-equipped-details{
+  margin-top:7px;
+  display:grid;
+  gap:3px
+}
+.gear-equipped-details .gear-equipped-line{
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr);
+  gap:4px;
+  border-top:1px solid #514536;
+  padding:5px 0;
+  font-size:11px
+}
+.gear-equipped-details .gear-equipped-line>span:first-child{
+  color:#ddc292
+}
+.gear-equipped-details .gear-detail{
+  font-size:10px
+}
+.crypt-bag .bag-capacity{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-size:11px;
+  color:#d5c4aa
+}
+.bag-capacity-track{
+  height:6px;
+  background:#101217;
+  border:1px solid #66543c;
+  margin:4px 0 8px
+}
+.bag-capacity-track span{
+  display:block;
+  height:100%;
+  background:#c2a06b
+}
+.crypt-bag .gear-row{
+  grid-template-columns:minmax(0,1fr) 50px;
+  gap:5px;
+  margin:5px 0
+}
+.crypt-bag .gear-row .wide{
+  margin:0;
+  min-width:0;
+  padding:7px
+}
+.crypt-bag .gear-item{
+  display:grid;
+  grid-template-columns:34px minmax(0,1fr);
+  gap:5px;
+  align-items:center;
+  border-left:3px solid var(--gear-tone);
+  background:linear-gradient(125deg,#30282e,#1e2026);
+  text-align:left
+}
+.gear-item svg{
+  width:32px;
+  height:32px;
+  margin:0!important
+}
+.gear-item .gear-item-name{
+  font:700 12px Georgia,serif;
+  color:var(--gear-tone);
+  overflow-wrap:anywhere
+}
+.gear-item .gear-detail{
+  font-size:10px;
+  line-height:1.35;
+  margin:3px 0
+}
+.gear-item .gear-action{
+  display:block;
+  color:#e0bf8e;
+  font-size:10px;
+  margin-top:4px
+}
+.crypt-bag [data-drop]{
+  font-size:11px;
+  color:#e5b3a9;
+  background:#38272c;
+  border-color:#77514a
+}
+.crypt-bag .bag-empty{
+  color:#bdae99;
+  text-align:center;
+  padding:10px;
+  border:1px dashed #63513d
+}
+@media(max-width:340px){
+  .crypt-gear{
+    padding:5px
+  }
+  .gear-rack{
+    grid-template-columns:minmax(0,1fr) minmax(54px,.7fr) minmax(0,1fr);
+    gap:3px
+  }
+  .crypt-gear .gear-slot{
+    padding:4px 2px;
+    min-height:76px
+  }
+  .crypt-gear .gear-slot svg{
+    width:26px;
+    height:26px
+  }
+  .gear-equipped-details .gear-equipped-line{
+    grid-template-columns:48px minmax(0,1fr)
+  }
+}
+/* TECH-012C — Habillage final du donjon : conserver la cascade et les adaptations aux petits écrans. */
 /* GAME-009E — bronze dungeon chrome. Canvas geometry and input handlers are unchanged. */
-#app>header{background:linear-gradient(145deg,#3a292b,#1c1b21 60%,#17191f);border-bottom:2px solid #876943;padding:5px 8px 6px;box-shadow:inset 0 1px #9d794d55}
-.hud-top{gap:5px}.hud-identity{display:flex;align-items:center;min-width:0;gap:5px}
-#hudClass{width:28px;height:28px;flex:none;background:#17191f;border:1px solid #7b6548;display:grid;place-items:center}
-#hudClass:empty{display:none}#hudClass .class-icon{width:24px;height:24px;margin:0}
-#app>header strong{font:700 14px Georgia,serif;letter-spacing:.035em;line-height:1.05;color:#e6c58d}
-#biomeName{font:10px system-ui,sans-serif;line-height:1.2;margin-top:3px}
-#stats{font-size:10px;line-height:1.25;color:#e1d2bd;max-width:55%;font-variant-numeric:tabular-nums}
-#hudMeters{gap:4px;margin-top:4px}.hud-meter{padding:3px 4px;background:#14171d;border:1px solid #61513c;font-variant-numeric:tabular-nums}
-.meter-label{color:#e7d6be;line-height:1.1;font-size:10px}
-.meter-label span:first-child{font-weight:600}.meter-track{height:7px;border-color:#6c5540;background:#080b10;margin-top:3px}
-.meter-fill{background:linear-gradient(90deg,#77343b,#b65b55)}.meter-res .meter-fill{background:linear-gradient(90deg,#335b7b,#74a7c2)}.meter-xp .meter-fill{background:linear-gradient(90deg,#997044,#e1bc77)}
-#app>main{background:radial-gradient(ellipse,#201b20,#090b0f 80%);box-shadow:inset 0 0 0 1px #5b4b36}
-#app>footer{background:linear-gradient(#302529,#1c1d23 65%,#16191e);border-top:2px solid #876943;min-height:156px;gap:7px;padding-top:5px;padding-bottom:5px;align-items:center}
-#pad{border:1px solid #a38555;background:linear-gradient(#211a20,#101218);border-radius:4px;box-shadow:inset 0 0 0 1px #382e29;gap:3px}
-#pad button{border:1px solid #806843;border-radius:3px;background:linear-gradient(#3a3438,#25242c);color:#e7cc96;text-shadow:0 1px #0c0d12;box-shadow:inset 0 1px #e9bf7720}
-#pad button:active{background:#805e3d;box-shadow:inset 0 0 0 1px #e5c17e}
-#pad #wait{background:linear-gradient(#66503b,#392c26);color:#f7d18c;border-color:#b08a55}
-#app>footer .right{gap:4px}
-#log{background:#141419;border:1px solid #645039;border-left:2px solid #b38b56;color:#e3d2b9;white-space:pre-line;overflow:hidden;font-size:10px;line-height:1.25;height:42px;padding:2px 4px}
-.skills button,.tools button{border-color:#80633e;background:linear-gradient(#352b30,#22232a);color:#efdfc0;border-radius:3px}
-.skills button{min-height:45px;gap:2px;padding:3px 2px}
-.skills button .skill-icon{width:17px;height:17px}
-.skills button .skill-caption{display:block;font-size:9px;line-height:1.15}
-.skills button .skill-cost{display:block;color:#a8c8de;font-size:9px;line-height:1}
-.skills button:disabled,.tools button:disabled{opacity:.55}
-.skills button.active,.tools button.active{background:#62452f;outline:2px solid #e9c17c;outline-offset:-2px}
-.tools button{min-height:29px;line-height:1.15}
-#app>footer .tiny{font-size:9px;color:#bdad97;line-height:1.15}
-.fx-chip{border-width:1px;background:#21191feb;box-shadow:0 2px 9px #0008;font-family:Georgia,serif}
-@media(orientation:portrait){#app>footer{min-height:190px;align-items:flex-end}}
-@media(max-width:340px){#app>header{padding-left:5px;padding-right:5px}#hudClass{width:24px;height:24px}#hudClass .class-icon{width:20px;height:20px}#app>header strong{font-size:12px}.hud-meter{padding:2px}.meter-label{font-size:9px}#app>footer{gap:4px}#app>footer .right{gap:3px}.skills button .skill-caption{font-size:8px}.skills button .skill-cost{font-size:8px}}
-@media(max-height:430px){#app>header{min-height:56px;padding:3px 6px}.hud-meter{padding:2px 3px}.meter-track{height:6px}#hudMeters{margin-top:2px}#app>footer{min-height:138px;padding-top:3px;padding-bottom:3px}.skills button{flex-direction:row;flex-wrap:wrap;min-height:32px;column-gap:3px;row-gap:1px}.skills button .skill-icon{width:13px;height:13px}.skills button .skill-cost{font-size:8px}#log{height:27px}#app>footer .tiny{font-size:8px}}
-</style></head><body><div id="app"><header><div class="hud-top"><div class="hud-identity"><span id="hudClass" aria-hidden="true"></span><strong>CRYPTGRAVE <span id="biomeName" style="color:#c9baa1">Les profondeurs</span></strong></div><span id="stats">Android · tour par tour</span></div><div id="hudMeters"></div></header><main><canvas id="game" width="640" height="384" aria-label="Carte du donjon"></canvas><div id="combatFx" aria-hidden="true"></div></main><footer><div class="pad" id="pad"><button data-d="-1,-1" aria-label="Nord-ouest">↖</button><button data-d="0,-1" aria-label="Nord">↑</button><button data-d="1,-1" aria-label="Nord-est">↗</button><button data-d="-1,0" aria-label="Ouest">←</button><button id="wait" aria-label="Attendre et fouiller">●</button><button data-d="1,0" aria-label="Est">→</button><button data-d="-1,1" aria-label="Sud-ouest">↙</button><button data-d="0,1" aria-label="Sud">↓</button><button data-d="1,1" aria-label="Sud-est">↘</button></div><div class="right"><div id="log" aria-live="polite" aria-label="Journal de combat">Choisis une classe.</div><div class="skills"><button data-skill="0">Talent 1</button><button data-skill="1">Talent 2</button><button data-skill="2">Talent 3</button></div><div class="tools"><button id="weaponAction" disabled>Arme</button><button id="bandage">Bandage</button><button id="inventory">Équipement</button><button id="consumables">Objets</button><button id="menu">Menu</button></div><div class="tiny">8 directions · ● attendre/fouiller · soins limités/étage</div></div></footer></div><div id="overlay"><div class="panel" id="panel"></div></div><script>
+#app>header{
+  background:linear-gradient(145deg,#3a292b,#1c1b21 60%,#17191f);
+  border-bottom:2px solid #876943;
+  padding:5px 8px 6px;
+  box-shadow:inset 0 1px #9d794d55
+}
+.hud-top{
+  gap:5px
+}
+.hud-identity{
+  display:flex;
+  align-items:center;
+  min-width:0;
+  gap:5px
+}
+#hudClass{
+  width:28px;
+  height:28px;
+  flex:none;
+  background:#17191f;
+  border:1px solid #7b6548;
+  display:grid;
+  place-items:center
+}
+#hudClass:empty{
+  display:none
+}
+#hudClass .class-icon{
+  width:24px;
+  height:24px;
+  margin:0
+}
+#app>header strong{
+  font:700 14px Georgia,serif;
+  letter-spacing:.035em;
+  line-height:1.05;
+  color:#e6c58d
+}
+#biomeName{
+  font:10px system-ui,sans-serif;
+  line-height:1.2;
+  margin-top:3px
+}
+#stats{
+  font-size:10px;
+  line-height:1.25;
+  color:#e1d2bd;
+  max-width:55%;
+  font-variant-numeric:tabular-nums
+}
+#hudMeters{
+  gap:4px;
+  margin-top:4px
+}
+.hud-meter{
+  padding:3px 4px;
+  background:#14171d;
+  border:1px solid #61513c;
+  font-variant-numeric:tabular-nums
+}
+.meter-label{
+  color:#e7d6be;
+  line-height:1.1;
+  font-size:10px
+}
+.meter-label span:first-child{
+  font-weight:600
+}
+.meter-track{
+  height:7px;
+  border-color:#6c5540;
+  background:#080b10;
+  margin-top:3px
+}
+.meter-fill{
+  background:linear-gradient(90deg,#77343b,#b65b55)
+}
+.meter-res .meter-fill{
+  background:linear-gradient(90deg,#335b7b,#74a7c2)
+}
+.meter-xp .meter-fill{
+  background:linear-gradient(90deg,#997044,#e1bc77)
+}
+#app>main{
+  background:radial-gradient(ellipse,#201b20,#090b0f 80%);
+  box-shadow:inset 0 0 0 1px #5b4b36
+}
+#app>footer{
+  background:linear-gradient(#302529,#1c1d23 65%,#16191e);
+  border-top:2px solid #876943;
+  min-height:156px;
+  gap:7px;
+  padding-top:5px;
+  padding-bottom:5px;
+  align-items:center
+}
+#pad{
+  border:1px solid #a38555;
+  background:linear-gradient(#211a20,#101218);
+  border-radius:4px;
+  box-shadow:inset 0 0 0 1px #382e29;
+  gap:3px
+}
+#pad button{
+  border:1px solid #806843;
+  border-radius:3px;
+  background:linear-gradient(#3a3438,#25242c);
+  color:#e7cc96;
+  text-shadow:0 1px #0c0d12;
+  box-shadow:inset 0 1px #e9bf7720
+}
+#pad button:active{
+  background:#805e3d;
+  box-shadow:inset 0 0 0 1px #e5c17e
+}
+#pad #wait{
+  background:linear-gradient(#66503b,#392c26);
+  color:#f7d18c;
+  border-color:#b08a55
+}
+#app>footer .right{
+  gap:4px
+}
+#log{
+  background:#141419;
+  border:1px solid #645039;
+  border-left:2px solid #b38b56;
+  color:#e3d2b9;
+  white-space:pre-line;
+  overflow:hidden;
+  font-size:10px;
+  line-height:1.25;
+  height:42px;
+  padding:2px 4px
+}
+.skills button,.tools button{
+  border-color:#80633e;
+  background:linear-gradient(#352b30,#22232a);
+  color:#efdfc0;
+  border-radius:3px
+}
+.skills button{
+  min-height:45px;
+  gap:2px;
+  padding:3px 2px
+}
+.skills button .skill-icon{
+  width:17px;
+  height:17px
+}
+.skills button .skill-caption{
+  display:block;
+  font-size:9px;
+  line-height:1.15
+}
+.skills button .skill-cost{
+  display:block;
+  color:#a8c8de;
+  font-size:9px;
+  line-height:1
+}
+.skills button:disabled,.tools button:disabled{
+  opacity:.55
+}
+.skills button.active,.tools button.active{
+  background:#62452f;
+  outline:2px solid #e9c17c;
+  outline-offset:-2px
+}
+.tools button{
+  min-height:29px;
+  line-height:1.15
+}
+#app>footer .tiny{
+  font-size:9px;
+  color:#bdad97;
+  line-height:1.15
+}
+.fx-chip{
+  border-width:1px;
+  background:#21191feb;
+  box-shadow:0 2px 9px #0008;
+  font-family:Georgia,serif
+}
+@media(orientation:portrait){
+  #app>footer{
+    min-height:190px;
+    align-items:flex-end
+  }
+}
+@media(max-width:340px){
+  #app>header{
+    padding-left:5px;
+    padding-right:5px
+  }
+  #hudClass{
+    width:24px;
+    height:24px
+  }
+  #hudClass .class-icon{
+    width:20px;
+    height:20px
+  }
+  #app>header strong{
+    font-size:12px
+  }
+  .hud-meter{
+    padding:2px
+  }
+  .meter-label{
+    font-size:9px
+  }
+  #app>footer{
+    gap:4px
+  }
+  #app>footer .right{
+    gap:3px
+  }
+  .skills button .skill-caption{
+    font-size:8px
+  }
+  .skills button .skill-cost{
+    font-size:8px
+  }
+}
+@media(max-height:430px){
+  #app>header{
+    min-height:56px;
+    padding:3px 6px
+  }
+  .hud-meter{
+    padding:2px 3px
+  }
+  .meter-track{
+    height:6px
+  }
+  #hudMeters{
+    margin-top:2px
+  }
+  #app>footer{
+    min-height:138px;
+    padding-top:3px;
+    padding-bottom:3px
+  }
+  .skills button{
+    flex-direction:row;
+    flex-wrap:wrap;
+    min-height:32px;
+    column-gap:3px;
+    row-gap:1px
+  }
+  .skills button .skill-icon{
+    width:13px;
+    height:13px
+  }
+  .skills button .skill-cost{
+    font-size:8px
+  }
+  #log{
+    height:27px
+  }
+  #app>footer .tiny{
+    font-size:8px
+  }
+}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+<div class="hud-top"><div class="hud-identity"><span id="hudClass" aria-hidden="true"></span><strong>CRYPTGRAVE <span id="biomeName" style="color:#c9baa1">Les profondeurs</span></strong></div><span id="stats">Android · tour par tour</span></div>
+<div id="hudMeters"></div>
+</header>
+<main>
+<canvas id="game" width="640" height="384" aria-label="Carte du donjon"></canvas>
+<div id="combatFx" aria-hidden="true"></div>
+</main>
+<footer>
+<div class="pad" id="pad"><button data-d="-1,-1" aria-label="Nord-ouest">↖</button><button data-d="0,-1" aria-label="Nord">↑</button><button data-d="1,-1" aria-label="Nord-est">↗</button><button data-d="-1,0" aria-label="Ouest">←</button><button id="wait" aria-label="Attendre et fouiller">●</button><button data-d="1,0" aria-label="Est">→</button><button data-d="-1,1" aria-label="Sud-ouest">↙</button><button data-d="0,1" aria-label="Sud">↓</button><button data-d="1,1" aria-label="Sud-est">↘</button></div>
+<div class="right">
+<div id="log" aria-live="polite" aria-label="Journal de combat">Choisis une classe.</div>
+<div class="skills"><button data-skill="0">Talent 1</button><button data-skill="1">Talent 2</button><button data-skill="2">Talent 3</button></div>
+<div class="tools"><button id="weaponAction" disabled>Arme</button><button id="bandage">Bandage</button><button id="inventory">Équipement</button><button id="consumables">Objets</button><button id="menu">Menu</button></div>
+<div class="tiny">8 directions · ● attendre/fouiller · soins limités/étage</div></div>
+</footer>
+</div>
+<div id="overlay">
+<div class="panel" id="panel"></div></div>
+<script>
 (()=>{'use strict';
 /* TECH-012C — Dimensions de la grille logique (W, H), taille native des sprites (T) et références DOM. KEY est une clé historique : la renommer empêcherait de retrouver les sauvegardes existantes. */
 const W=48,H=32,T=16,VIEWW=40,VIEWH=24,KEY='rogue-android-game002-v1',canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),log=document.getElementById('log'),stats=document.getElementById('stats'),overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
