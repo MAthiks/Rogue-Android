@@ -25,6 +25,7 @@ jobs:
         run: |
           node tools/build-game.cjs --check
           node tests/tech013a.cjs
+          node tests/tech013b.cjs
       - name: Verify release metadata and publication guard
         run: node tests/game011d-release.cjs
       - name: Run all engine suites
