@@ -1462,10 +1462,10 @@ const AI_FAMILY={
 };
 const BOSS_PHASE_PATTERN={
  stone:[[2,0],[-2,0],[0,2],[0,-2]],ash:[[1,1],[-1,-1]],veil:[[1,0],[-1,0],[0,1],[0,-1]],
- ossuary:[[1,1],[-1,-1]],mire:[[0,1],[0,-1]],runes:[[1,-1],[-1,1]],
- frost:[[1,1],[-1,-1]],abyssal:[[1,-1],[-1,1],[1,1],[-1,-1]]
+ ossuary:[[1,-1],[-1,1]],mire:[[0,1],[0,-1]],runes:[[2,0],[-2,0]],
+ frost:[[1,1],[-1,-1],[1,-1],[-1,1]],abyssal:[[2,2],[-2,-2],[1,-1],[-1,1]]
 };
-function aiFamily(m){return AI_FAMILY[m.species]||AI_FAMILY[m.role]||'pressure'}
+function aiFamily(m){return Object.hasOwn(AI_FAMILY,m.species)?AI_FAMILY[m.species]:Object.hasOwn(AI_FAMILY,m.role)?AI_FAMILY[m.role]:'pressure'}
 function aiLine(a,b,board,all=[],ignore=null){
  const n=dist(a,b);let prev=a;
  for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};
@@ -1501,14 +1501,14 @@ function prepareCoordinatedIntent(m,player,all,board){
 }
 function coordinatedAction(m,player,all,board,contacts,base){
  if(m.stun||base.type!=='move')return base;
- const d=dist(m,player),family=aiFamily(m);
- // Never infer the player position through walls. Require direct sight for formation changes.
- if(d>8||!aiLine(m,player,board))return base;
+ const d=dist(m,player),family=aiFamily(m),visible=d<=8&&aiLine(m,player,board);
+ const threats=aiThreatCells(all),safeBefore=threats.length?aiEscapeCells(player,all,board):[];
+ const legal=p=>!safeBefore.length||aiEscapeCells(player,all,board,[],m,p).length>0;
+ // Never pursue a hidden player via the formation layer; only veto a move that seals the last exit.
+ if(!visible)return legal(base)?base:{type:'wait'};
  const allies=all.filter(a=>a!==m&&a.hp>0&&!a.stun&&dist(m,a)<=4&&aiLine(m,a,board));
  const occupied=p=>all.some(a=>a!==m&&a.hp>0&&aiSame(a,p))||aiSame(p,player);
  const opts=aiNeighbors(m,board).filter(p=>!occupied(p));
- const threats=aiThreatCells(all),safeBefore=aiEscapeCells(player,all,board);
- const legal=p=>!threats.length||!safeBefore.length||aiEscapeCells(player,all,board,[],m,p).length>0;
  const candidates=opts.filter(legal);
  if(!legal(base))return candidates.length?{type:'move',...candidates.sort((a,b)=>dist(a,player)-dist(b,player))[0]}:{type:'wait'};
  if(m.boss||!allies.length)return base;
