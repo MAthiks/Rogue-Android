@@ -23,6 +23,11 @@ jobs:
             echo "Running $test"
             node "$test" /tmp/rogue-003b.html || exit 1
           done
+      - name: Verify migration from released GAME-004 and RC1
+        run: |
+          git show 2918d5ba49c37440f01c26fc5cd41bc4d0938eba:index.html > /tmp/rogue-game004.html
+          git show 3344817bc9e6d4c7d7ea8acf3c7af118fe2c0e60:index.html > /tmp/rogue-rc1.html
+          node tests/game008a.cjs /tmp/rogue-game004.html /tmp/rogue-rc1.html
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
