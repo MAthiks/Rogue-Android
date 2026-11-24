@@ -36,6 +36,7 @@ jobs:
         env:
           ROGUE_ART_PREVIEW: '1'
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: rogue-interface-art-preview
           path: art-preview/
@@ -58,6 +59,33 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: rogue-game-006-rc1
+          path: candidate/
+          retention-days: 30
+          if-no-files-found: error
+
+  rc2-package:
+    if: github.head_ref == 'release/game-007-rc2' || github.ref == 'refs/heads/release/game-007-rc2'
+    needs: [engine, chromium-mobile]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rogue-interface-art-preview
+          path: candidate/captures
+      - name: Prepare standalone Android browser candidate
+        run: |
+          mkdir -p candidate
+          cp index.html candidate/index.html
+          cp docs/GAME007_RC2_RECIPE.md candidate/RECETTE.md
+          cp docs/GAME006_RC1_RECIPE.md candidate/RECETTE_RC1.md
+          git rev-parse HEAD > candidate/BUILD_SHA.txt
+          cd candidate
+          find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rogue-game-007-rc2
           path: candidate/
           retention-days: 30
           if-no-files-found: error
