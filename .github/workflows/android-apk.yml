@@ -10,6 +10,8 @@ jobs:
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    env:
+      ART_PREVIEW: ${{ github.head_ref == 'release/game-009f-art-rc' || github.ref == 'refs/heads/release/game-009f-art-rc' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -28,7 +30,10 @@ jobs:
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
       - name: Compile APK and instrumentation tests
-        run: gradle -p android --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+        run: |
+          args=()
+          if [ "$ART_PREVIEW" = true ]; then args+=(-PcryptgraveArtPreview); fi
+          gradle -p android --no-daemon "${args[@]}" :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Verify APK payload and original engine
         run: |
           python - <<'PY'
@@ -45,6 +50,12 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump permissions android/app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk-permissions.txt
           ! grep -F 'android.permission.INTERNET' /tmp/apk-permissions.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/app/build/outputs/apk/debug/app-debug.apk > /tmp/apk-badging.txt
+          if [ "$ART_PREVIEW" = true ]; then
+            grep -F "package: name='com.mathiks.cryptgrave.artpreview' versionCode='2' versionName='0.9.1-art-rc1'" /tmp/apk-badging.txt
+          else
+            grep -F "package: name='com.mathiks.cryptgrave' versionCode='1' versionName='0.9.0'" /tmp/apk-badging.txt
+          fi
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -57,18 +68,27 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: gradle -p android --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            if [ "$ART_PREVIEW" = true ]; then gradle -p android --no-daemon -PcryptgraveArtPreview :app:connectedDebugAndroidTest; else gradle -p android --no-daemon :app:connectedDebugAndroidTest; fi
       - name: Prepare test APK
         run: |
           mkdir -p apk-preview
-          cp android/app/build/outputs/apk/debug/app-debug.apk apk-preview/CRYPTGRAVE-0.9.0-test.apk
+          if [ "$ART_PREVIEW" = true ]; then
+            name=CRYPTGRAVE-0.9.1-art-rc1.apk
+            cp docs/GAME009F_ART_RC.md apk-preview/RECETTE.md
+          else
+            name=CRYPTGRAVE-0.9.0-test.apk
+            cp docs/GAME008D_ANDROID.md apk-preview/RECETTE.md
+          fi
+          cp android/app/build/outputs/apk/debug/app-debug.apk "apk-preview/$name"
           git rev-parse HEAD > apk-preview/BUILD_SHA.txt
-          cp docs/GAME008D_ANDROID.md apk-preview/RECETTE.md
+          cp /tmp/apk-badging.txt apk-preview/APK_INFO.txt
           cd apk-preview
-          sha256sum CRYPTGRAVE-0.9.0-test.apk > SHA256SUMS.txt
+          sha256sum "$name" > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: cryptgrave-android-test
+          name: ${{ env.ART_PREVIEW == 'true' && 'cryptgrave-art-rc1-android' || 'cryptgrave-android-test' }}
           path: apk-preview/
           if-no-files-found: error
           retention-days: 30
