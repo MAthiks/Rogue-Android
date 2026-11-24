@@ -31,12 +31,13 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
     await page.locator('#close').tap();
     // GAME-005A: persisted legendary pieces, mobile inventory, and live set activation.
-    await page.evaluate(k=>{
+    const fixture1=await page.evaluate(k=>{
       const d=JSON.parse(localStorage.getItem(k));
       const gear=(slot,name)=>({id:++d.S.serial,slot,name,rarity:5,itemLevel:12,grade:2,atk:slot==='weapon'?3:0,def:slot==='armor'?3:1,crit:0,regen:0,dodge:0,affixes:[],setId:'bastion'});
       d.S.bag=[gear('weapon','Brise-rempart'),gear('armor','Cuirasse du Bastion'),gear('helmet','Heaume du Bastion')];
-      localStorage.setItem(k,JSON.stringify(d));
+      return d;
     },key);
+    await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:fixture1,marker:'fixture-1'});
     await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
     assert.ok(await page.locator('.gear-detail').first().textContent().then(s=>s.includes('Légendaire')));
     const ids=(await read()).S.bag.map(i=>i.id);
@@ -49,15 +50,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.locator('#close').tap();await page.reload();await page.locator('#resume').tap();
     assert.equal((await read()).S.equip.armor.id,ids[1]);
     // GAME-005B: aim a bow via touch without moving; persist combat style.
-    await page.evaluate(k=>{
+    const fixture2=await page.evaluate(k=>{
       const d=JSON.parse(localStorage.getItem(k));
       d.map.fill(1);for(let y=4;y<=15;y++)for(let x=4;x<=15;x++)d.map[y*48+x]=0;
       d.S.x=6;d.S.y=6;d.S.res=8;d.S.combatStyle='balanced';
       d.S.equip.weapon={id:++d.S.serial,slot:'weapon',name:'Arc de test',family:'bow',rarity:1,atk:1,def:0,crit:0,regen:0,dodge:0};
       d.monsters=[{x:9,y:6,hp:100,maxHp:100,atk:1,kind:'Cible',role:'melee',color:'#ccc',stun:10}];
       d.features=[];d.terrain=[];d.loot=[];d.stairs={x:15,y:15};
-      localStorage.setItem(k,JSON.stringify(d));
+      return d;
     },key);
+    await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:fixture2,marker:'fixture-2'});
     await page.reload();await page.locator('#resume').tap();
     const beforeShot=await read();
     await page.locator('#weaponAction').tap();await page.locator('[data-d="1,0"]').tap();
