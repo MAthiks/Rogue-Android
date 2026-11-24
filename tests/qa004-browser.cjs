@@ -48,6 +48,27 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.equal((await read()).S.equip.helmet,null);
     await page.locator('#close').tap();await page.reload();await page.locator('#resume').tap();
     assert.equal((await read()).S.equip.armor.id,ids[1]);
+    // GAME-005B: aim a bow via touch without moving; persist combat style.
+    await page.evaluate(k=>{
+      const d=JSON.parse(localStorage.getItem(k));
+      d.map.fill(1);for(let y=4;y<=15;y++)for(let x=4;x<=15;x++)d.map[y*48+x]=0;
+      d.S.x=6;d.S.y=6;d.S.res=8;d.S.combatStyle='balanced';
+      d.S.equip.weapon={id:++d.S.serial,slot:'weapon',name:'Arc de test',family:'bow',rarity:1,atk:1,def:0,crit:0,regen:0,dodge:0};
+      d.monsters=[{x:9,y:6,hp:100,maxHp:100,atk:1,kind:'Cible',role:'melee',color:'#ccc',stun:10}];
+      d.features=[];d.terrain=[];d.loot=[];d.stairs={x:15,y:15};
+      localStorage.setItem(k,JSON.stringify(d));
+    },key);
+    await page.reload();await page.locator('#resume').tap();
+    const beforeShot=await read();
+    await page.locator('#weaponAction').tap();await page.locator('[data-d="1,0"]').tap();
+    const afterShot=await read();
+    assert.equal(afterShot.S.turn,beforeShot.S.turn+1);
+    assert.equal(afterShot.S.x,beforeShot.S.x);assert.equal(afterShot.S.y,beforeShot.S.y);
+    assert.ok(afterShot.monsters[0].hp<100);assert.equal(afterShot.S.res,7);
+    await page.locator('#inventory').tap();await page.locator('[data-style="defensive"]').tap();
+    assert.equal((await read()).S.combatStyle,'defensive');await page.locator('#close').tap();
+    await page.reload();await page.locator('#resume').tap();
+    assert.equal((await read()).S.combatStyle,'defensive');
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
