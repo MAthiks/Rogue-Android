@@ -104,6 +104,15 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     const afterEvent=await read();assert.equal(afterEvent.S.bandages,beforeEvent.S.bandages+2);assert.equal(afterEvent.S.turn,beforeEvent.S.turn+1);assert.equal(afterEvent.features[0].spent,true);assert.equal(afterEvent.S.x,6);
     await page.reload();await page.locator('#resume').tap();await page.locator('[data-d="1,0"]').tap();
     assert.equal((await read()).S.x,7);assert.equal((await read()).S.bandages,afterEvent.S.bandages);
+    // GAME-005F: high regeneration must not make paid ranged attacks free.
+    const fixture6=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.S.res=8;d.S.maxRes=40;d.S.attrs[3]=40;d.S.nodes.master=true;d.S.equip.weapon={id:++d.S.serial,slot:'weapon',name:'Arc',family:'bow',rarity:4,atk:3,regen:1};d.S.equip.ring={id:++d.S.serial,slot:'ring',name:'Anneau',rarity:4,regen:3};d.monsters=[{x:9,y:6,hp:999,maxHp:999,atk:1,kind:'Cible',role:'melee',color:'#ccc',stun:10}];d.features=[];d.terrain=[];d.loot=[];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-6')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-6','1')}},{key,data:fixture6});
+    await page.reload();await page.locator('#resume').tap();
+    await page.locator('#weaponAction').tap();await page.locator('[data-d="1,0"]').tap();
+    assert.equal((await read()).S.res,7);
+    await page.locator('#inventory').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Combat effectif'));
+    await page.locator('#close').tap();
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
