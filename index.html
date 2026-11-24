@@ -318,6 +318,58 @@ function setSummary(){
 }
 function startMenu(){mode='start';const resume=!!localStorage.getItem(KEY);show('<h1>ROGUE <small>Android</small></h1><p>Roguelike tactique en pixel art. Mort permanente, exploration procédurale et commandes exclusivement au pavé à huit directions.</p>'+(resume?'<button class="wide" id="resume">Reprendre la partie</button>':'')+'<button class="wide" id="startopts">Options graphiques</button><h2>Nouvelle partie</h2><div class="classes">'+Object.entries(CLASSES).map(([k,c])=>`<button data-class="${k}"><b>${c.name}</b><small>${c.desc}</small></button>`).join('')+'</div><p class="tiny">Une nouvelle partie remplace la sauvegarde précédente.</p>');document.getElementById('startopts').onclick=()=>options(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else{localStorage.removeItem(KEY);startMenu()}}}
 function newGame(id){let c=CLASSES[id];S={classId:id,x:0,y:0,hp:c.hp,maxHp:c.hp,res:c.maxRes,maxRes:c.maxRes,level:1,xp:0,points:0,floor:1,turn:0,bandages:3,atk:0,armor:0,guard:0,boost:0,cool:[0,0,0],kills:0,dead:false};migrate();selected=null;generate();mode='game';hide();say('Un nouveau destin commence · '+currentBiome().name+'.');update();save()}
+// GAME-006B: biome-specific species, independent deterministic stream.
+const BESTIARY={
+ crypt:[['boneguard','Garde ossuaire','#d1c4a1','brute','crush'],['wraith','Spectre funéraire','#9cafd0','tracker','drain']],
+ cave:[['cavefang','Croc cavernicole','#b79b78','ambusher','crush'],['spitter','Cracheur des cavernes','#9bb16b','archer','bolt']],
+ ruins:[['sentinel','Sentinelle brisée','#aaa392','brute','crush'],['runecaster','Runiste errant','#d3ae79','archer','burst']],
+ volcanic:[['slag','Golem de scories','#bd795c','brute','burst'],['cinder','Salamandre de braise','#e6a35e','tracker','bolt']],
+ sanctum:[['templar','Templier déchu','#c3b4e4','brute','crush'],['oracle','Oracle profané','#a79bdc','archer','drain']],
+ fungal:[['mycelium','Colosse mycélien','#a9be75','brute','burst'],['sporeling','Porte-spores','#c5a8d5','coward','bolt']],
+ frozen:[['frostfang','Loup des glaces','#a8d8e8','tracker','crush'],['icecaller','Sorcière du givre','#80a8dc','archer','bolt']],
+ abyss:[['voidstalker','Rôdeur abyssal','#bc84bc','ambusher','drain'],['riftspawn','Rejeton de la faille','#d49ace','tracker','burst']]
+};
+const CREATURE_POWERS={
+ crush:{name:'Frappe lourde',range:1,power:2,cd:3,ranged:false},
+ bolt:{name:'Projectile',range:4,power:1,cd:3,ranged:true},
+ drain:{name:'Drain vital',range:3,power:0,cd:3,ranged:true},
+ burst:{name:'Onde',range:2,power:1,cd:4,ranged:false}
+};
+function populateBestiary(all,biome,floor,seed){
+ if(floor<4||!Object.hasOwn(BESTIARY,biome))return all;
+ let state=(seed^Math.imul(floor,0x51ed270b)^0xe245b891)>>>0;
+ const rnd=n=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return Math.floor(state/4294967296*n)};
+ const depth=Math.max(1,Math.min(30,floor)),bonus=Math.floor((depth-1)/6);
+ return all.map(m=>{
+   if(m.boss||m.elite||m.rare||rnd(100)>=55)return m;
+   const [species,kind,color,role,skill]=BESTIARY[biome][rnd(2)];
+   const hp=5+Math.floor(depth/2)+bonus+(role==='brute'?4:role==='tracker'?1:0);
+   return {...m,species,kind,color,role,creatureSkill:skill,creatureCD:0,hp,maxHp:hp,atk:2+bonus+(role==='brute'?1:0)};
+ });
+}
+function creatureAction(m,player,all,board){
+ if(!m.species||m.boss||!Object.hasOwn(CREATURE_POWERS,m.creatureSkill))return null;
+ const skill=CREATURE_POWERS[m.creatureSkill],distance=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),same=(a,b)=>a.x===b.x&&a.y===b.y;
+ const ray=(a,b)=>{const n=distance(a,b);let prev=a;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y)||(i<n&&all.some(z=>z!==m&&z.hp>0&&same(z,p))))return false;prev=p}return true};
+ if(m.intent){const intent=m.intent;delete m.intent;m.creatureCD=skill.cd;return {type:'release',hit:distance(m,player)<=skill.range+Number(m.creatureSkill==='burst')&&intent.cells.some(p=>same(p,player))&&ray(m,player),power:skill.power,ranged:skill.ranged,drain:m.creatureSkill==='drain',name:skill.name}}
+ if(m.creatureCD>0){m.creatureCD--;return null}
+ if(distance(m,player)>skill.range||!ray(m,player))return null;
+ const cells=[{x:player.x,y:player.y}];
+ if(m.creatureSkill==='burst')for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+   const p={x:player.x+dx,y:player.y+dy};
+   if(!same(m,p)&&board.stepOK(p.x,p.y,player.x,player.y)&&ray(m,p))cells.push(p);
+ }
+ if(m.role==='ambusher')m.awake=true;
+ m.intent={cells,power:skill.power};return {type:'announce',name:skill.name};
+}
+function drawCreatureMark(m,px,py){
+ if(!m.species)return;
+ ctx.fillStyle='#f2dcb3';
+ if(m.creatureSkill==='crush'){ctx.fillRect(px+1,py+5,3,7);ctx.fillRect(px+12,py+5,3,7)}
+ else if(m.creatureSkill==='bolt'){ctx.fillRect(px+12,py+3,2,9);ctx.fillRect(px+10,py+3,4,2)}
+ else if(m.creatureSkill==='drain'){ctx.fillRect(px+7,py+9,2,4);ctx.fillRect(px+5,py+11,6,2)}
+ else if(m.creatureSkill==='burst'){ctx.fillRect(px+6,py+2,4,2);ctx.fillRect(px+2,py+9,2,3);ctx.fillRect(px+12,py+9,2,3)}
+}
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
@@ -398,58 +450,6 @@ function buildDungeon(W,H,floor,seed){
     if(rand(3)===0){const pos=pick(r,false);if(pos)loot.push({...pos,kind:rand(3)===0?'gear':'bandage'})}
   }
   return {map,start,stairs,monsters,loot,rooms,seed:seed>>>0,profile:p.id,shortcuts};
-}
-// GAME-006B: biome-specific species, independent deterministic stream.
-const BESTIARY={
- crypt:[['boneguard','Garde ossuaire','#d1c4a1','brute','crush'],['wraith','Spectre funéraire','#9cafd0','tracker','drain']],
- cave:[['cavefang','Croc cavernicole','#b79b78','ambusher','crush'],['spitter','Cracheur des cavernes','#9bb16b','archer','bolt']],
- ruins:[['sentinel','Sentinelle brisée','#aaa392','brute','crush'],['runecaster','Runiste errant','#d3ae79','archer','burst']],
- volcanic:[['slag','Golem de scories','#bd795c','brute','burst'],['cinder','Salamandre de braise','#e6a35e','tracker','bolt']],
- sanctum:[['templar','Templier déchu','#c3b4e4','brute','crush'],['oracle','Oracle profané','#a79bdc','archer','drain']],
- fungal:[['mycelium','Colosse mycélien','#a9be75','brute','burst'],['sporeling','Porte-spores','#c5a8d5','coward','bolt']],
- frozen:[['frostfang','Loup des glaces','#a8d8e8','tracker','crush'],['icecaller','Sorcière du givre','#80a8dc','archer','bolt']],
- abyss:[['voidstalker','Rôdeur abyssal','#bc84bc','ambusher','drain'],['riftspawn','Rejeton de la faille','#d49ace','tracker','burst']]
-};
-const CREATURE_POWERS={
- crush:{name:'Frappe lourde',range:1,power:2,cd:3,ranged:false},
- bolt:{name:'Projectile',range:4,power:1,cd:3,ranged:true},
- drain:{name:'Drain vital',range:3,power:0,cd:3,ranged:true},
- burst:{name:'Onde',range:2,power:1,cd:4,ranged:false}
-};
-function populateBestiary(all,biome,floor,seed){
- if(floor<4||!Object.hasOwn(BESTIARY,biome))return all;
- let state=(seed^Math.imul(floor,0x51ed270b)^0xe245b891)>>>0;
- const rnd=n=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return Math.floor(state/4294967296*n)};
- const depth=Math.max(1,Math.min(30,floor)),bonus=Math.floor((depth-1)/6);
- return all.map(m=>{
-   if(m.boss||m.elite||m.rare||rnd(100)>=55)return m;
-   const [species,kind,color,role,skill]=BESTIARY[biome][rnd(2)];
-   const hp=5+Math.floor(depth/2)+bonus+(role==='brute'?4:role==='tracker'?1:0);
-   return {...m,species,kind,color,role,creatureSkill:skill,creatureCD:0,hp,maxHp:hp,atk:2+bonus+(role==='brute'?1:0)};
- });
-}
-function creatureAction(m,player,all,board){
- if(!m.species||m.boss||!Object.hasOwn(CREATURE_POWERS,m.creatureSkill))return null;
- const skill=CREATURE_POWERS[m.creatureSkill],distance=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),same=(a,b)=>a.x===b.x&&a.y===b.y;
- const ray=(a,b)=>{const n=distance(a,b);let prev=a;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y)||(i<n&&all.some(z=>z!==m&&z.hp>0&&same(z,p))))return false;prev=p}return true};
- if(m.intent){const intent=m.intent;delete m.intent;m.creatureCD=skill.cd;return {type:'release',hit:distance(m,player)<=skill.range+Number(m.creatureSkill==='burst')&&intent.cells.some(p=>same(p,player))&&ray(m,player),power:skill.power,ranged:skill.ranged,drain:m.creatureSkill==='drain',name:skill.name}}
- if(m.creatureCD>0){m.creatureCD--;return null}
- if(distance(m,player)>skill.range||!ray(m,player))return null;
- const cells=[{x:player.x,y:player.y}];
- if(m.creatureSkill==='burst')for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-   const p={x:player.x+dx,y:player.y+dy};
-   if(!same(m,p)&&board.stepOK(p.x,p.y,player.x,player.y)&&ray(m,p))cells.push(p);
- }
- if(m.role==='ambusher')m.awake=true;
- m.intent={cells,power:skill.power};return {type:'announce',name:skill.name};
-}
-function drawCreatureMark(m,px,py){
- if(!m.species)return;
- ctx.fillStyle='#f2dcb3';
- if(m.creatureSkill==='crush'){ctx.fillRect(px+1,py+5,3,7);ctx.fillRect(px+12,py+5,3,7)}
- else if(m.creatureSkill==='bolt'){ctx.fillRect(px+12,py+3,2,9);ctx.fillRect(px+10,py+3,4,2)}
- else if(m.creatureSkill==='drain'){ctx.fillRect(px+7,py+9,2,4);ctx.fillRect(px+5,py+11,6,2)}
- else if(m.creatureSkill==='burst'){ctx.fillRect(px+6,py+2,4,2);ctx.fillRect(px+2,py+9,2,3);ctx.fillRect(px+12,py+9,2,3)}
 }
 function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
 function decorateDungeon(d,W,H,floor){
