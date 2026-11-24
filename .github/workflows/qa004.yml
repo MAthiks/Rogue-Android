@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify release metadata and publication guard
+        run: node tests/game011d-release.cjs
       - name: Run all engine suites
         run: |
           git show 087621fea8d6bba80aa5e1efc4c589fda09ec418:index.html > /tmp/rogue-003b.html
@@ -155,6 +157,21 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node tests/game008c-pwa.cjs
       - run: node tools/build-pwa.cjs pwa-dist
+      - name: Package versioned PWA candidate
+        run: |
+          node tools/package-release.cjs pwa-dist release-preview
+          cd release-preview
+          sha256sum -c SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cryptgrave-v1-pwa-candidate
+          path: release-preview/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Guard public deployment against release candidate
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_pages == true
+        run: node tools/package-release.cjs --assert-publishable
       - uses: actions/upload-artifact@v4
         with:
           name: rogue-pwa-preview

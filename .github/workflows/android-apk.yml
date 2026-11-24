@@ -57,7 +57,8 @@ jobs:
           elif [ "$GAME_PREVIEW" = true ]; then
             grep -F "package: name='com.mathiks.cryptgrave.gamepreview' versionCode='3' versionName='0.10.0-rc1'" /tmp/apk-badging.txt
           else
-            grep -F "package: name='com.mathiks.cryptgrave' versionCode='3' versionName='0.10.0-rc1'" /tmp/apk-badging.txt
+            expected=$(node -e 'const m=require("./release.json");process.stdout.write("package: name=\x27"+m.applicationId+(m.stage==="rc"?m.previewSuffix:"")+"\x27 versionCode=\x27"+m.versionCode+"\x27 versionName=\x27"+m.version+"\x27")')
+            grep -F "$expected" /tmp/apk-badging.txt
           fi
       - name: Enable KVM
         run: |
@@ -83,18 +84,21 @@ jobs:
             name=CRYPTGRAVE-0.10.0-rc1-preview.apk
             cp docs/GAME010E_RC1.md apk-preview/RECETTE.md
           else
-            name=CRYPTGRAVE-0.10.0-rc1-test.apk
-            cp docs/GAME010E_RC1.md apk-preview/RECETTE.md
+            version=$(node -p 'require("./release.json").version')
+            name="CRYPTGRAVE-${version}-test.apk"
+            cp docs/GAME011D_RELEASE_PACKAGING.md apk-preview/RECETTE.md
+            cp release.json apk-preview/RELEASE.json
+            echo "V1_ARTIFACT=cryptgrave-${version}-android" >> "$GITHUB_ENV"
           fi
           cp android/app/build/outputs/apk/debug/app-debug.apk "apk-preview/$name"
           git rev-parse HEAD > apk-preview/BUILD_SHA.txt
           cp /tmp/apk-badging.txt apk-preview/APK_INFO.txt
           cd apk-preview
-          sha256sum "$name" > SHA256SUMS.txt
+          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ART_PREVIEW == 'true' && 'cryptgrave-art-rc1-android' || env.GAME_PREVIEW == 'true' && 'cryptgrave-010-rc1-android' || 'cryptgrave-android-test' }}
+          name: ${{ env.ART_PREVIEW == 'true' && 'cryptgrave-art-rc1-android' || env.GAME_PREVIEW == 'true' && 'cryptgrave-010-rc1-android' || env.V1_ARTIFACT || 'cryptgrave-android-test' }}
           path: apk-preview/
           if-no-files-found: error
           retention-days: 30
