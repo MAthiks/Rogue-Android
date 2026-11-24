@@ -469,8 +469,8 @@ function extendedBossReward(m){
  return {id:++S.serial,slot:b.slot,name:b.relic,atk:b.atk||0,def:b.def||0,crit:b.crit||0,regen:b.regen||0,dodge:b.dodge||0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,S.floor)),uniqueId:'boss-'+m.boss,...(b.family?{family:b.family}:{})};
 }
 function drawBossPhase(m,px,py){
- if(!Object.hasOwn(EXTENDED_BOSSES,m.boss))return;
- ctx.fillStyle='#f7e3b5';for(let i=0;i<(m.phase||1);i++)ctx.fillRect(px+3+i*4,py+13,2,2);
+ if(!m.boss)return;
+ ctx.fillStyle='#f7e3b5';for(let i=0;i<Math.max(1,Math.min(Object.hasOwn(EXTENDED_BOSSES,m.boss)?3:2,m.phase||1));i++)ctx.fillRect(px+3+i*4,py+13,2,2);
 }
 // GAME-006D: deterministic merchants, optional gold field for legacy saves.
 const MERCHANTS={
@@ -1162,11 +1162,39 @@ function enemySprite(m){
  ENEMY_ART[id].forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+3,y+4,end-x,1]);x=end}});
  ENEMY_ART_CACHE.set(key,ops);return ops;
 }
+// GAME-007D: eight boss silhouettes; reserved HP/phase rows, no change to hitboxes.
+const BOSS_ART={
+ stone:{color:'#a68d70',glow:'#efc280',rows:['..oo....oo..','.ohHo..oHho.','oHHHooooHHHo','oHHHHeeHHHHo','oHhHHHHHHhHo','oHHHHhhHHHHo','ooHhHHHHhHoo','..oHHHHHHo..','.oHHooHHHHo.','.oooo..oooo.']},
+ ash:{color:'#bb6251',glow:'#ffb56b',rows:['...o.oo.o...','..oHohhoHo..','.oHHHHHHHHo.','oHHHHeeHHHHo','.oHHHHHHHHo.','oHHhhHHhhHHo','oHHHHHHHHHHo','.oHHhHHhHHo.','..oHHHHHHo..','.oooo..oooo.']},
+ veil:{color:'#81749f',glow:'#cbb7fa',rows:['....oooo....','...oHHHHo...','..oHHHHHHo..','..oHooooHo..','.oHHooooHHo.','oHHHHhhHHHHo','oHhHHHHHHhHo','.oHHHHHHHHo.','..oHHHHHHo..','...oooooo...']},
+ ossuary:{color:'#c2b28b',glow:'#f9e7b5',rows:['..o.o..o.o..','..oho..oho..','..ohhhhHHo..','..oeehheeo..','...ohhhho...','oo.oooooo.oo','ohohohhohoho','ohohohhohoho','...oHooHo...','..ooo..ooo..']},
+ mire:{color:'#829b58',glow:'#c9ed7e',rows:['....oooo....','..ooHHHHoo..','.oHhHHhHHHo.','oHHHHHHHHHHo','oooooooooooo','..oHHeeHHo..','.oHHhHHhHHo.','oHHHHHHHHHHo','oHoHHHHHHoHo','oo.oooooo.oo']},
+ runes:{color:'#a88b55',glow:'#ffd879',rows:['..oooooo..o.','..ohhhhH..h.','..oHeeHo..h.','oooHHHHoooo.','oHhHHHHhHoH.','oHHheehHHoH.','oHHheehHHoH.','ooohhhhoooH.','..oHooHo..H.','..ooo.ooo.o.']},
+ frost:{color:'#739ebd',glow:'#c3f4ff',rows:['.o...oo...o.','oho.oHHo.oho','oHHooHHooHHo','.oHHHeeHHHo.','ooHHHHHHHHoo','oHhHHHHHHhHo','oHHhhHHhhHHo','ooHHHHHHHHoo','..oHooooHo..','.oooo..oooo.']},
+ abyssal:{color:'#9268ad',glow:'#eca7ff',rows:['o..........o','oHo..oo..oHo','.oHooHHooHo.','oHHHHeeHHHHo','oHhHHhhHHhHo','.oHHoeeoHHo.','oHoHHhhHHoHo','o..oHHHHo..o','..oHo..oHo..','.ooo....ooo.']}
+};
+const BOSS_ART_CACHE=new Map();
+function bossSprite(m){
+ const id=Object.hasOwn(BOSS_ART,m.boss)?m.boss:'stone',a=BOSS_ART[id];
+ const maxPhase=Object.hasOwn(EXTENDED_BOSSES,id)?3:2;
+ const phase=Math.max(1,Math.min(maxPhase,Number.isInteger(m.phase)?m.phase:1));
+ const key=id+':'+phase;if(BOSS_ART_CACHE.has(key))return BOSS_ART_CACHE.get(key);
+ const palette={o:'#151820',H:a.color,h:tileTint(a.color,1.32),e:phase===1?a.glow:phase===2?tileTint(a.glow,1.17):'#fff1db'};
+ const ops=[];
+ a.rows.forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+2,y+3,end-x,1]);x=end}});
+ // Stage accents: body only, leave phase markers and health bar readable.
+ if(phase>=2){ops.push([a.glow,4,8,1,2],[a.glow,11,8,1,2]);}
+ if(phase===3){ops.push(['#fff1db',7,10,2,1],[a.glow,6,11,1,1],[a.glow,9,11,1,1]);}
+ BOSS_ART_CACHE.set(key,ops);return ops;
+}
+function drawBossSprite(m,px,py){
+ for(const [c,x,y,w,h] of bossSprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
+}
 function drawEnemySprite(m,px,py){
- if(m.boss){ctx.fillStyle=m.color;ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#251c20';ctx.fillRect(px+5,py+6,2,2);ctx.fillRect(px+9,py+6,2,2);if(m.role==='archer'){ctx.fillStyle='#e3d4aa';ctx.fillRect(px+12,py+4,2,8)}return}
+ if(m.boss){drawBossSprite(m,px,py);return}
  for(const [c,x,y,w,h] of enemySprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(m.role==='guardian'||m.elite){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
