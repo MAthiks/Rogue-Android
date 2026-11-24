@@ -340,8 +340,20 @@ const ADV_TALENTS={
  ]
 };
 function advancedTalents(){return ADV_TALENTS[S.classId]||[]}
-function canLearnAdvanced(id){const n=advancedTalents().find(n=>n[0]===id);return !!(n&&S.points>0&&!S.nodes['adv_'+id]&&S.level>=n[2]&&(!n[3]||S.spec===n[3])&&(S.nodes[n[4]]||S.nodes['adv_'+n[4]]))}
-function learnAdvanced(id){if(!canLearnAdvanced(id))return false;S.points--;S.nodes['adv_'+id]=true;return true}
+/* TECH-012C — Vérifie niveau, points disponibles, spécialisation, absence d'achat antérieur et prérequis. */
+function canLearnAdvanced(id){
+  const n=advancedTalents().find(n=>n[0]===id);
+  return !!(n&&S.points>0&&!S.nodes['adv_'+id]&&
+    S.level>=n[2]&&(!n[3]||S.spec===n[3])&&
+    (S.nodes[n[4]]||S.nodes['adv_'+n[4]]))
+}
+function learnAdvanced(id){
+  if(!canLearnAdvanced(id))return false;
+  S.points--;
+  S.nodes['adv_'+id]=true;
+  return true
+}
+/* TECH-012C — Additionne les bonus de la statistique k issus des talents avancés acquis et compatibles avec la spécialisation. */
 function talentBonus(k){return advancedTalents().reduce((sum,n)=>sum+(S.nodes['adv_'+n[0]]&&(!n[3]||S.spec===n[3])?(n[5][k]||0):0),0)}
 function advancedTalentUI(refresh){
  const el=document.createElement('section'),nodes=advancedTalents();
@@ -349,6 +361,7 @@ function advancedTalentUI(refresh){
  el.querySelectorAll('[data-advanced]').forEach(b=>b.onclick=()=>{if(learnAdvanced(b.dataset.advanced))refresh()});return el;
 }
 // GAME-010B: additive specialization combos; stored in the existing nodes dictionary.
+/* TECH-012C — Chaque synergie définit un identifiant, un nom, un niveau requis, une spécialisation, un prérequis et une description. */
 const SYNERGIES={
  warrior:[
  ['fracture','Fracture',10,'offense','adv_vigor','Frappe : +3 dégâts sur cible exposée.'],
@@ -376,8 +389,14 @@ function canLearnSynergy(id){
  const n=synergyTalents().find(n=>n[0]===id);
  return !!(n&&S.spec===n[3]&&S.level>=n[2]&&S.points>0&&!S.nodes['syn_'+id]&&S.nodes[n[4]]);
 }
-function learnSynergy(id){if(!canLearnSynergy(id))return false;S.points--;S.nodes['syn_'+id]=true;return true}
+function learnSynergy(id){
+  if(!canLearnSynergy(id))return false;
+  S.points--;
+  S.nodes['syn_'+id]=true;
+  return true
+}
 function hasSynergy(id){const n=synergyTalents().find(n=>n[0]===id);return !!(n&&S.spec===n[3]&&S.level>=n[2]&&S.nodes['syn_'+id]&&S.nodes[n[4]])}
+/* TECH-012C — Applique un bonus conditionnel selon la compétence, les états de combat et le rang de la cible. */
 function synergyDamage(m,p){
  if(p?.skill){
   if(hasSynergy('fracture')&&p.index===0&&m.exposed>0)return 3;
@@ -392,6 +411,7 @@ function synergyDamage(m,p){
 function synergyHeal(){return (hasSynergy('recovery')&&S.hp*2<=S.maxHp?3:0)+(hasSynergy('ward')&&S.shield>0?3:0)}
 function synergyGuard(){return hasSynergy('fortress')||hasSynergy('footwork')?1:0}
 function synergyShield(){return hasSynergy('restoration')&&S.res*2<=S.maxRes?3:0}
+/* TECH-012C — Retourne les durées des effets selon les synergies acquises ; les boss résistent à la prolongation de l'étourdissement. */
 function synergyDuration(kind,m){
  if(kind==='exposed')return hasSynergy('rend')?6:4;
  if(kind==='bleed')return hasSynergy('hemorrhage')?5:3;
@@ -414,6 +434,7 @@ const CONSUMABLES={
  smoke:{name:'Bombe fumigène',type:'Utilitaire',color:'#a6b8ba',min:2,weight:8,desc:'Étourdit les ennemis visibles à 2 cases pendant leur prochaine action.'},
  toolkit:{name:'Trousse de désamorçage',type:'Utilitaire',color:'#91c6a1',min:1,weight:12,desc:'Désamorce les pièges adjacents, même cachés.'}
 };
+/* TECH-012C — Capacité maximale par type de consommable, indépendante du sac d'équipement. */
 const POUCH_CAP=5;
 function pouchCount(id){return Object.hasOwn(CONSUMABLES,id)?Math.max(0,Math.min(POUCH_CAP,Math.floor(Number(S.pouch?.[id])||0))):0}
 function addConsumable(id){if(!Object.hasOwn(CONSUMABLES,id)||pouchCount(id)>=POUCH_CAP)return false;S.pouch??={};S.pouch[id]=pouchCount(id)+1;return true}
@@ -587,10 +608,15 @@ function doctrineBonus(s,kind,target=null,profile=null){
  }
  return 0;
 }
+/* TECH-012C — Seuils de rendement décroissant et plafonds des probabilités de critique, d'esquive et de régénération. */
 const BALANCE={critSoft:35,critMax:50,dodgeSoft:25,dodgeMax:35,regenMax:4};
+/* TECH-012C — Au-delà du seuil souple, chaque tranche de trois points bruts apporte un point de probabilité, dans la limite du plafond. */
 function diminishingChance(raw,soft,max){return Math.max(0,Math.min(max,raw<=soft?raw:soft+Math.floor((raw-soft)/3)))}
+/* TECH-012C — Calcule la probabilité de critique en combinant perception, équipement, classe, profil d'attaque et talents. */
 function criticalChance(profile=null){return diminishingChance(3+S.attrs[5]*2+bonus('crit')+(profile?.crit||0)+(S.classId==='rogue'?5:0)+(S.nodes.o2?8:0)+talentBonus('crit'),BALANCE.critSoft,BALANCE.critMax)}
+/* TECH-012C — Calcule la probabilité d'esquive en combinant dextérité, équipement, talents et spécialisation. */
 function dodgeChance(){return diminishingChance(S.attrs[1]+bonus('dodge')+talentBonus('dodge')+(S.nodes.d2?5:0)+(S.spec==='defense'?5:0)+doctrineBonus(S,'dodge'),BALANCE.dodgeSoft,BALANCE.dodgeMax)}
+/* TECH-012C — Sélectionne l'attribut offensif approprié à la compétence ou à l'arme ; la lance utilise le meilleur de Force et Dextérité. */
 function attackAttribute(profile=null){
  const fallback=S.classId==='mage'?4:S.classId==='warrior'?0:1;
  if(profile?.skill)return S.attrs[fallback];
@@ -668,12 +694,15 @@ function rollRarity(floor,roll,minimum=1){
 }
 /* TECH-012C — Génère un équipement selon la profondeur, le niveau de rareté minimal et le générateur fourni. L'identifiant est transmis par l'appelant. */
 function createGear(id,floor,minimum=1,rng=rand,forcedRarity=null){
+  /* TECH-012C — La profondeur est bornée de 1 à 30 ; le grade augmente tous les huit étages. */
   const depth=Math.max(1,Math.min(30,floor)),grade=1+Math.floor((depth-1)/8);
   const slots=Object.keys(GEAR_SLOTS),slot=slots[rng(slots.length)];
   const rarity=forcedRarity??rollRarity(depth,rng(100),minimum);
   const it={id,slot,name:'',rarity,itemLevel:depth,grade,atk:slot==='weapon'?grade:slot==='ring'?Math.ceil(grade/2):0,def:slot==='armor'?grade:slot==='helmet'||slot==='boots'?Math.ceil(grade/2):0,crit:0,regen:0,dodge:0,affixes:[]};
   const base=GEAR_BASES[slot][rng(GEAR_BASES[slot].length)];
-  it.name=RARITIES[rarity-1].name+' · '+base;if(slot==='weapon')it.family=WEAPON_BASE_IDS[base];
+  it.name=RARITIES[rarity-1].name+' · '+base;
+  if(slot==='weapon')it.family=WEAPON_BASE_IDS[base];
+  /* TECH-012C — Un objet légendaire peut recevoir une pièce d'ensemble compatible ou un objet unique du même emplacement. */
   if(rarity===5){
     const sets=Object.entries(GEAR_SETS).filter(([,set])=>set.pieces[slot]);
     if(sets.length&&rng(2)===0){const [key,set]=sets[rng(sets.length)];it.setId=key;it.name=set.pieces[slot]}
@@ -683,7 +712,14 @@ function createGear(id,floor,minimum=1,rng=rand,forcedRarity=null){
   // Preserve GAME-004 elite reward: rare, positive crit, no regen.
   const count=rarity-1;
   let pool=AFFIXES.filter(a=>a.slots.includes(slot)&&rarity>=(a.min||2));
-  if(rarity===3){const a=pool.find(a=>a.id==='precision');const value=a.value(grade);it.crit+=value;it.affixes.push({id:a.id,name:a.name,stat:a.stat,value});pool=pool.filter(x=>x!==a)}
+  if(rarity===3){
+    const a=pool.find(a=>a.id==='precision');
+    const value=a.value(grade);
+    it.crit+=value;
+    it.affixes.push({id:a.id,name:a.name,stat:a.stat,value});
+    pool=pool.filter(x=>x!==a)
+  }
+  /* TECH-012C — Les affixes sont tirés sans remise dans une liste filtrée par emplacement et rareté. */
   while(it.affixes.length<count&&pool.length){
     const a=pool.splice(rng(pool.length),1)[0],value=a.value(grade);
     it[a.stat]+=value;it.affixes.push({id:a.id,name:a.name,stat:a.stat,value});
@@ -985,9 +1021,13 @@ const MERCHANTS={
 };
 const GOLD_CAP=99999;
 function goldBalance(){return Math.max(0,Math.min(GOLD_CAP,Math.floor(Number(S?.gold)||0)))}
+/* TECH-012C — Récompense en or proportionnelle à la profondeur et au type de l'ennemi. */
 function goldReward(m,floor){const depth=Math.max(1,Math.min(30,floor));return m.boss?25+depth:m.rare?15+Math.floor(depth/2):m.elite?8+Math.floor(depth/3):2+Math.floor(depth/5)}
+/* TECH-012C — Prix d'achat calculé à partir du niveau de l'objet, de sa rareté et d'une majoration après le niveau 15. */
 function gearPrice(it){const depth=Math.max(1,Math.min(30,Math.floor(Number(it.itemLevel)||1))),rarity=rarityOf(it);return 12+depth*2+[0,9,23,48,95][rarity-1]+Math.max(0,depth-15)}
+/* TECH-012C — La revente rapporte 40 % du prix d'achat, arrondis à l'entier inférieur avec un minimum de 1. */
 function salePrice(it){return Math.max(1,Math.floor(gearPrice(it)*0.4))}
+/* TECH-012C — Génère un stock déterministe par étage, graine et marchand, sans attribuer les identifiants des futurs objets achetés. */
 function merchantStock(floor,seed,merchantId){
  const v=MERCHANTS[merchantId];if(!v)return [];
  let n=(seed^Math.imul(floor,0x9e3779b1)^0x26d08fa9)>>>0;
@@ -1017,9 +1057,11 @@ function buildMerchant(d,decorated,terrain,loot,all,floor,W,H){
  const n=(d.seed^Math.imul(floor,0x85ebca6b))>>>0,merchantId=['arms','apothecary','trader'][Math.floor((floor-2)/3)%3],p=candidates[n%candidates.length];
  return {...p,type:'merchant',merchantId,found:true,stock:merchantStock(floor,d.seed,merchantId)};
 }
+/* TECH-012C — Le commerce exige un marchand adjacent et accessible, ainsi qu'une zone sans ennemi vivant à six cases ou moins. */
 function merchantAvailable(f){
  return mode==='game'&&S&&!S.dead&&f?.type==='merchant'&&Object.hasOwn(MERCHANTS,f.merchantId)&&features.includes(f)&&dist(f,S)===1&&stepOK(f.x,f.y,S.x,S.y)&&!mob(f.x,f.y)&&!monsters.some(m=>m.hp>0&&dist(m,S)<=6);
 }
+/* TECH-012C — Contrôle le stock, le prix, l'or et la capacité de rangement avant toute transaction. */
 function canBuy(f,index){
  if(!merchantAvailable(f)||!Number.isInteger(index))return false;
  const a=f.stock?.[index];if(!a||!Number.isInteger(a.qty)||a.qty<=0||!Number.isInteger(a.price)||a.price<=0||goldBalance()<a.price)return false;
@@ -1034,8 +1076,14 @@ function buyMerchant(f,index){
  if(a.kind==='gear')S.bag.push({...a.item,id:++S.serial});
  else if(a.kind==='consumable'){if(!addConsumable(a.id))return false}
  else S.bandages++;
- S.gold=goldBalance()-a.price;a.qty--;say('Achat : -'+a.price+' or.');save();update();return true;
+ S.gold=goldBalance()-a.price;
+ a.qty--;
+ say('Achat : -'+a.price+' or.');
+ save();
+ update();
+ return true;
 }
+/* TECH-012C — Exclut les reliques de boss et les ventes qui dépasseraient le plafond d'or. */
 function canSell(f,id){
  if(!merchantAvailable(f)||!Number.isInteger(id))return false;
  const it=S.bag.find(v=>v.id===id);
@@ -1045,7 +1093,12 @@ function canSell(f,id){
 function sellMerchant(f,id){
  if(!canSell(f,id))return false;
  const i=S.bag.findIndex(v=>v.id===id),it=S.bag[i],price=salePrice(it);
- S.bag.splice(i,1);S.gold=goldBalance()+price;say('Vente : +'+price+' or.');save();update();return true;
+ S.bag.splice(i,1);
+ S.gold=goldBalance()+price;
+ say('Vente : +'+price+' or.');
+ save();
+ update();
+ return true;
 }
 function merchantMenu(f,tab='buy'){
  if(!merchantAvailable(f)){say('Commerce indisponible : éloigne les ennemis.');return}
@@ -1158,9 +1211,17 @@ function drawSpecialRoom(f,px,py,visible){
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
-  const rand=n=>{state=(state+0x6D2B79F5)>>>0;let t=state;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return Math.floor(((t^(t>>>14))>>>0)/4294967296*n)};
+  const rand=n=>{
+    state=(state+0x6D2B79F5)>>>0;
+    let t=state;
+    t=Math.imul(t^(t>>>15),t|1);
+    t^=t+Math.imul(t^(t>>>7),t|61);
+    return Math.floor(((t^(t>>>14))>>>0)/4294967296*n)
+  };
+  /* TECH-012C — Trois profils définissent le nombre, les dimensions des salles et le nombre de raccourcis recherchés. */
   const profiles=[{id:'chambres',target:11,w:5,h:4,dw:5,dh:4,loops:3},{id:'galeries',target:12,w:4,h:4,dw:8,dh:3,loops:4},{id:'halles',target:8,w:7,h:5,dw:5,dh:5,loops:2}];
   const p=profiles[rand(profiles.length)], map=Array(W*H).fill(1),rooms=[];
+  /* TECH-012C — Le creusement conserve une bordure extérieure de murs infranchissables. */
   const index=(x,y)=>y*W+x, carve=(x,y)=>{if(x>0&&y>0&&x<W-1&&y<H-1)map[index(x,y)]=0};
   const add=(x,y,w,h,shape)=>{
     const r={x,y,w,h,cx:x+(w>>1),cy:y+(h>>1),shape};
@@ -1170,6 +1231,7 @@ function buildDungeon(W,H,floor,seed){
     }
     rooms.push(r);
   };
+  /* TECH-012C — Le placement est borné à 360 essais ; une marge sépare les salles pour limiter les chevauchements. */
   for(let n=0;n<360&&rooms.length<p.target;n++){
     const w=p.w+rand(p.dw),h=p.h+rand(p.dh),x=1+rand(W-w-1),y=1+rand(H-h-1);
     if(rooms.some(r=>x<r.x+r.w+1&&x+w+1>r.x&&y<r.y+r.h+1&&y+h+1>r.y))continue;
@@ -1184,6 +1246,7 @@ function buildDungeon(W,H,floor,seed){
   for(let a=0;a<rooms.length;a++)for(let b=a+1;b<rooms.length;b++)
     edges.push({a,b,d:Math.abs(rooms[a].cx-rooms[b].cx)+Math.abs(rooms[a].cy-rooms[b].cy),tie:rand(10000)});
   edges.sort((a,b)=>a.d-b.d||a.tie-b.tie);
+  /* TECH-012C — Structure union-find : relie les composantes sans cycle lors de la construction de l'arbre couvrant minimal. */
   const parent=rooms.map((_,i)=>i),root=i=>{while(parent[i]!==i){parent[i]=parent[parent[i]];i=parent[i]}return i};
   const tree=[],extra=[];
   const corridor=e=>{
@@ -1191,12 +1254,29 @@ function buildDungeon(W,H,floor,seed){
     if(rand(2)){for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++)carve(x,a.y);for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++)carve(b.x,y)}
     else{for(let y=Math.min(a.y,b.y);y<=Math.max(a.y,b.y);y++)carve(a.x,y);for(let x=Math.min(a.x,b.x);x<=Math.max(a.x,b.x);x++)carve(x,b.y)}
   };
-  for(const e of edges){const a=root(e.a),b=root(e.b);if(a===b){extra.push(e);continue}parent[a]=b;tree.push(e);corridor(e)}
+  /* TECH-012C — L'algorithme de Kruskal sélectionne d'abord les liaisons les plus courtes ; les arêtes restantes servent aux raccourcis. */
+  for(const e of edges){
+    const a=root(e.a),b=root(e.b);
+    if(a===b){
+      extra.push(e);
+      continue
+    }
+    parent[a]=b;
+    tree.push(e);
+    corridor(e)
+  }
   let shortcuts=0;
   // Only count added links that actually open at least one new cell.
-  for(const e of extra){if(shortcuts>=p.loops)break;const before=map.reduce((n,v)=>n+(v===0),0);corridor(e);if(map.reduce((n,v)=>n+(v===0),0)>before)shortcuts++}
+  for(const e of extra){
+    if(shortcuts>=p.loops)break;
+    const before=map.reduce((n,v)=>n+(v===0),0);
+    corridor(e);
+    if(map.reduce((n,v)=>n+(v===0),0)>before)shortcuts++
+  }
+  /* TECH-012C — Le point de départ est choisi dans une salle feuille de l'arbre. */
   const degree=rooms.map(()=>0);for(const e of tree){degree[e.a]++;degree[e.b]++}
   const leaves=rooms.map((_,i)=>i).filter(i=>degree[i]===1),startRoom=leaves[rand(leaves.length)],start=center(rooms[startRoom]);
+  /* TECH-012C — Parcours en largeur orthogonal : mesure la distance réelle dans les couloirs et vérifie la connexité du plan. */
   const distance=Array(W*H).fill(-1),queue=[index(start.x,start.y)];distance[queue[0]]=0;
   for(let i=0;i<queue.length;i++){
     const k=queue[i],x=k%W,y=Math.floor(k/W);
@@ -1206,9 +1286,12 @@ function buildDungeon(W,H,floor,seed){
     }
   }
   if(queue.length!==map.filter(v=>v===0).length)throw new Error('Disconnected dungeon');
+  /* TECH-012C — Les escaliers occupent le centre de la salle la plus éloignée du départ selon la distance parcourable. */
   const exitRoom=rooms.reduce((best,r,i)=>distance[index(r.cx,r.cy)]>distance[index(rooms[best].cx,rooms[best].cy)]?i:best,startRoom);
   const stairs=center(rooms[exitRoom]),occupied=new Set([index(start.x,start.y),index(stairs.x,stairs.y)]),monsters=[],loot=[];
+  /* TECH-012C — Les ennemis initiaux sont placés à plus de huit cases du départ, en distance de Chebyshev. */
   const safe=(x,y)=>Math.max(Math.abs(x-start.x),Math.abs(y-start.y))>8;
+  /* TECH-012C — Choisit une case libre d'une salle et la réserve afin d'éviter les superpositions. */
   const pick=(r,enemy)=>{
     const candidates=[];
     for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){
@@ -1217,6 +1300,7 @@ function buildDungeon(W,H,floor,seed){
     if(!candidates.length)return null;
     const pos=candidates[rand(candidates.length)];occupied.add(index(pos.x,pos.y));return pos;
   };
+  /* TECH-012C — Détermine le rôle, les PV et l'attaque de base de l'ennemi selon la profondeur et le tirage. */
   const spawn=(pos,elite)=>{
     const roll=rand(100),role=elite?'guardian':roll<24?'brute':roll<49||floor===1?'wanderer':roll<69?'archer':roll<82?'ambusher':floor<3?'wanderer':roll<91?'coward':'tracker';
     const types={guardian:['Gardien','#e6ad65',16+floor*2,5],brute:['Brute','#c87961',8+floor,3],wanderer:['Errant','#bd777d',4+Math.floor(floor/2),2],archer:['Archer','#91ab6e',4+Math.floor(floor/2),2],ambusher:['Guetteur','#9282bb',5+Math.floor(floor/2),2],coward:['Fuyard','#c0b58a',5+Math.floor(floor/2),2],tracker:['Traqueur','#75b0b7',6+Math.floor(floor/2),2]};
@@ -1284,12 +1368,20 @@ function decorateDungeon(d,W,H,floor){
   const open=(x,y)=>inside(x,y)&&map[key(x,y)]===0,occupied=new Set([d.start,d.stairs,...d.monsters,...d.loot].map(p=>key(p.x,p.y)));
   const far=(x,y)=>Math.max(Math.abs(x-d.start.x),Math.abs(y-d.start.y))>4;
   const add=(x,y,type,extra={})=>{features.push({x,y,type,...extra});occupied.add(key(x,y))};
-  const candidates=pred=>{const a=[];for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++)if(!occupied.has(key(x,y))&&far(x,y)&&pred(x,y))a.push({x,y});return a};
+  const candidates=pred=>{
+    const a=[];
+    for(let y=1;y<H-1;y++)
+      for(let x=1;x<W-1;x++)
+        if(!occupied.has(key(x,y))&&far(x,y)&&pred(x,y))a.push({x,y});
+    return a
+  };
   const select=(a,count,fn)=>{for(let i=0;i<count&&a.length;i++){const p=a.splice(rnd(a.length),1)[0];if(!occupied.has(key(p.x,p.y)))fn(p.x,p.y)}};
+  /* TECH-012C — Une porte est placée dans un passage étroit : ouvert sur un axe, fermé sur l'autre. */
   const doors=candidates((x,y)=>open(x,y)&&((open(x-1,y)&&open(x+1,y)&&!open(x,y-1)&&!open(x,y+1))||(open(x,y-1)&&open(x,y+1)&&!open(x-1,y)&&!open(x+1,y))));
   select(doors,Math.min(5,2+Math.floor(floor/3)),(x,y)=>add(x,y,'door',{open:false,found:true}));
   select(candidates((x,y)=>open(x,y)&&d.rooms.some(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h)),2+(floor>=5?1:0),(x,y)=>add(x,y,'chest',{open:false,found:true,reward:rnd(4)===0?'bandage':'gear'}));
   if(floor>=2)select(candidates((x,y)=>open(x,y)),Math.min(5,1+Math.floor(floor/3)),(x,y)=>add(x,y,'trap',{found:false,spent:false,damage:3+Math.min(5,Math.floor(floor/3))}));
+  /* TECH-012C — Recherche une zone murée de 3 × 3 entourée de murs, avec une entrée adjacente à un passage existant. */
   const secrets=[];
   for(let y=2;y<H-4;y++)for(let x=2;x<W-4;x++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
     const ex=x+1-dx*2,ey=y+1-dy*2,ax=ex-dx,ay=ey-dy;
@@ -1304,6 +1396,7 @@ function decorateDungeon(d,W,H,floor){
     add(q.ex,q.ey,'secret',{open:false,found:false});
     add(q.x+1,q.y+1,'chest',{open:false,found:true,reward:'gear',secret:true});
   }
+  /* TECH-012C — Les portes fermées deviennent des obstacles dans la grille ; leur ouverture rétablit la case libre. */
   for(const f of features)if(f.type==='door')map[key(f.x,f.y)]=1;
   return {map,features};
 }
