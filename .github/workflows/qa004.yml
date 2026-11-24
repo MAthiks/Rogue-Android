@@ -55,6 +55,12 @@ jobs:
         run: node tests/game010d.cjs
       - name: Verify campaign progression and build balance
         run: node tests/game010e.cjs
+      - name: Verify unreadable save recovery
+        run: node tests/game011a.cjs
+      - name: Verify transfers from published 0.10.0
+        run: |
+          git show 76246db7809002b4af1e3c1f17a4adbe8a74b229:index.html > /tmp/cryptgrave-010.html
+          node tests/game008e3.cjs /tmp/cryptgrave-010.html
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
