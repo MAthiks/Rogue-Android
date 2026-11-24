@@ -136,3 +136,18 @@ Le pavé directionnel appelle move() ; les boutons de compétences appellent act
 | platform | Intégration PWA et Android | API de la plateforme |
 
 Ce tableau est une proposition de séparation des responsabilités, pas la description de fichiers existants. Avant toute extraction, identifier les accès à l'état partagé, conserver la séquence d'initialisation et exécuter les tests historiques. Les tests actuels extraient parfois le JavaScript depuis index.html ; une modularisation doit adapter leur méthode de chargement sans réduire les assertions. La migration vers Godot devra rester indépendante d'un simple changement de présentation.
+
+## Bilan du chantier TECH-012
+
+Référence de comparaison : ce4fa6fab83bc6f19df416f58581c974de02c6de (CRYPTGRAVE 1.0.0 RC1).
+
+Au commit c496283f1907d45f000af4ff835a276a8a8d0e85, le fichier index.html comporte 4 317 lignes contre 1 893 au départ, et 198 nouveaux commentaires français balisés TECH-012A ou TECH-012C. Le CSS a été développé en règles multiligne ; les fonctions compactes et les principaux flux du moteur ont été aérés. Les longues chaînes HTML/SVG, les catalogues et certaines expressions restent volontairement regroupés lorsque leur découpage risque de changer leur contenu ou de perturber les tests.
+
+### Vérifications et limites
+
+- Comparaison textuelle avec le fichier de référence après suppression des seuls nouveaux commentaires balisés et des espaces : aucune différence de caractères non blancs détectée. Ce contrôle ne prouve pas à lui seul une équivalence sémantique : JavaScript, HTML et CSS peuvent donner un sens aux espaces.
+- Les suites historiques de tests restent inchangées. Certains tests isolent les fonctions en découpant le script selon leurs signatures : les commentaires de bloc évitent notamment qu'une fin de ligne commentée absorbe le délimiteur ajouté par ces tests.
+- Exiger la réussite de QA-004 (moteur, Chromium mobile, PWA) et Android APK sur le dernier commit de la PR avant fusion. Vérifier les retours de rendu et de commandes sur smartphone avant publication.
+- La séparation en modules, le renommage des variables historiques, la suppression du code ancien et le portage Godot ne sont pas inclus dans cette PR. Les traiter dans des chantiers indépendants, avec des tests ciblés.
+
+La documentation doit évoluer avec le moteur. Lors d'une modification fonctionnelle, mettre à jour les commentaires et le guide concernés dans la même PR.
