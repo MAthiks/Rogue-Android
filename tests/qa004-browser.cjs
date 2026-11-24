@@ -150,6 +150,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.locator('[data-buy="0"]').tap();let bought=await read();assert.equal(bought.S.gold,78);assert.equal(bought.features[0].stock[0].qty,0);assert.equal(bought.S.bag.length,1);assert.equal(bought.S.x,6);
     await page.locator('#shopSell').tap();await page.locator('[data-sell]').tap();let sold=await read();assert.equal(sold.S.gold,86);assert.equal(sold.S.bag.length,0);
     await page.locator('#shopBack').tap();await page.reload();await page.locator('#resume').tap();assert.equal((await read()).S.gold,86);assert.equal((await read()).features[0].stock[0].qty,0);
+    // GAME-006E: special room via direction pad, single choice, persistence.
+    const fixture11=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.S.hp=20;d.S.maxHp=50;d.S.res=5;d.S.maxRes=30;d.monsters=[];d.terrain=[];d.loot=[];d.features=[{x:7,y:6,type:'specialRoom',roomId:'sanctuary',found:true,spent:false}];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-11')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-11','1')}},{key,data:fixture11});
+    await page.reload();await page.locator('#resume').tap();await page.locator('[data-d="1,0"]').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Sanctuaire de repos'));
+    await page.locator('#roomBack').tap();assert.equal((await read()).features[0].spent,false);
+    await page.locator('[data-d="1,0"]').tap();await page.locator('[data-room-choice="rest"]').tap();
+    let rested=await read();assert.equal(rested.S.hp,34);assert.equal(rested.features[0].spent,true);assert.equal(rested.features[0].choice,'rest');assert.equal(rested.S.turn,fixture11.S.turn+1);
+    await page.reload();await page.locator('#resume').tap();assert.equal((await read()).features[0].spent,true);
+    await page.locator('[data-d="1,0"]').tap();assert.equal((await read()).S.x,7);assert.equal((await read()).S.hp,34);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
