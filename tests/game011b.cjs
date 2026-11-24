@@ -98,7 +98,33 @@ function testCampaignStress(newHtml){
     }
     const s=b.state().S;results.push({id,spec,seed,floor:s.floor,level:s.level,turn:s.turn,outcome:s.ended||'budget-or-policy-limit'});
   }
-  assert(checks>20&&turns>300&&transitions>0,'stress coverage');
-  return {runs:results.length,actions,turns,transitions,checks,reloads,results};
+  // Controlled transition marathon: isolate floor changes and persistence from the
+  // imperfect navigation policy above. No claim of organic combat victory.
+  let marathonTransitions=0,marathonReloads=0,terminalVictories=0;
+  for(const id of ['warrior','rogue','ranger','mage']){
+    storage.clear();const b=load(newHtml,78901+id.length*79);b.newGame(id);
+    for(let floor=1;floor<=30;floor++){
+      const d=b.state(),s=d.S;
+      assert(s.floor===floor,'sequential floor');
+      const boss=d.monsters.find(m=>m.boss);
+      const x=8,y=8;d.map.fill(1);for(let yy=6;yy<=10;yy++)for(let xx=6;xx<=10;xx++)d.map[yy*48+xx]=0;
+      d.monsters.splice(0);d.features.splice(0);d.terrain.splice(0);d.loot.splice(0);s.x=x;s.y=y;d.stairs.x=x+1;d.stairs.y=y;
+      if(boss){
+        // Keep the authentic boss alive for one turn to verify the stair gate.
+        d.monsters.push({...boss,x:10,y:10,stun:3});b.move(1,0);
+        assert(b.state().S.floor===floor&&!b.state().S.ended,'live boss prevents descent');
+        d.monsters.splice(0);s.x=x;s.y=y;
+      }
+      const before=s.turn;
+      b.move(1,0);
+      if(floor===30){assert(b.state().S.ended==='victory'&&!storage.has(key)&&b.readHistory().wins===1&&b.readHistory().total===1,'single victory and deleted run');terminalVictories++;b.save();assert(!storage.has(key),'no terminal resurrection');}
+      else {
+        assert(s.floor===floor+1&&s.turn===before+1,'one turn descent');
+        verify(b);const raw=storage.get(key);assert(b.restore(),'marathon reload');b.resume();equal(b.state().S,JSON.parse(raw).S,'marathon player');marathonTransitions++;marathonReloads++;
+      }
+    }
+  }
+  assert(checks>20&&turns>300&&transitions>0&&marathonTransitions===116&&terminalVictories===4,'stress coverage');
+  return {runs:results.length,actions,turns,transitions,checks,reloads,marathonTransitions,marathonReloads,terminalVictories,results};
 }
 console.log(testCampaignStress(fs.readFileSync(path.join(__dirname,'../index.html'),'utf8')));
