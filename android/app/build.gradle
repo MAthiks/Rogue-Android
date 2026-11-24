@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 def artPreview = project.hasProperty('cryptgraveArtPreview')
+def gamePreview = project.hasProperty('cryptgraveGamePreview')
+if (artPreview && gamePreview) throw new GradleException('Choose only one preview variant')
 android {
     namespace 'com.mathiks.cryptgrave'
     compileSdk 35
@@ -9,8 +11,8 @@ android {
         applicationId 'com.mathiks.cryptgrave'
         minSdk 23
         targetSdk 35
-        versionCode artPreview ? 2 : 1
-        versionName artPreview ? '0.9.1' : '0.9.0'
+        versionCode artPreview ? 2 : 3
+        versionName artPreview ? '0.9.1' : '0.10.0-rc1'
         manifestPlaceholders = [appLabel: 'CRYPTGRAVE']
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
@@ -20,6 +22,9 @@ android {
                 applicationIdSuffix '.artpreview'
                 versionNameSuffix '-art-rc1'
                 manifestPlaceholders = [appLabel: 'CRYPTGRAVE (Art RC)']
+            } else if (gamePreview) {
+                applicationIdSuffix '.gamepreview'
+                manifestPlaceholders = [appLabel: 'CRYPTGRAVE (0.10 RC1)']
             }
         }
         release { minifyEnabled false }

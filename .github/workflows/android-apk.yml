@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 35
     env:
       ART_PREVIEW: ${{ github.head_ref == 'release/game-009f-art-rc' || github.ref == 'refs/heads/release/game-009f-art-rc' }}
+      GAME_PREVIEW: ${{ github.head_ref == 'feature/game-010e-balance-rc1' || github.ref == 'refs/heads/feature/game-010e-balance-rc1' || github.head_ref == 'release/game-010-rc1' || github.ref == 'refs/heads/release/game-010-rc1' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -32,7 +33,7 @@ jobs:
       - name: Compile APK and instrumentation tests
         run: |
           args=()
-          if [ "$ART_PREVIEW" = true ]; then args+=(-PcryptgraveArtPreview); fi
+          if [ "$ART_PREVIEW" = true ]; then args+=(-PcryptgraveArtPreview); elif [ "$GAME_PREVIEW" = true ]; then args+=(-PcryptgraveGamePreview); fi
           gradle -p android --no-daemon "${args[@]}" :app:assembleDebug :app:assembleDebugAndroidTest
       - name: Verify APK payload and original engine
         run: |
@@ -53,8 +54,10 @@ jobs:
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/app/build/outputs/apk/debug/app-debug.apk > /tmp/apk-badging.txt
           if [ "$ART_PREVIEW" = true ]; then
             grep -F "package: name='com.mathiks.cryptgrave.artpreview' versionCode='2' versionName='0.9.1-art-rc1'" /tmp/apk-badging.txt
+          elif [ "$GAME_PREVIEW" = true ]; then
+            grep -F "package: name='com.mathiks.cryptgrave.gamepreview' versionCode='3' versionName='0.10.0-rc1'" /tmp/apk-badging.txt
           else
-            grep -F "package: name='com.mathiks.cryptgrave' versionCode='1' versionName='0.9.0'" /tmp/apk-badging.txt
+            grep -F "package: name='com.mathiks.cryptgrave' versionCode='3' versionName='0.10.0-rc1'" /tmp/apk-badging.txt
           fi
       - name: Enable KVM
         run: |
@@ -69,16 +72,19 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
-            if [ "$ART_PREVIEW" = true ]; then gradle -p android --no-daemon -PcryptgraveArtPreview :app:connectedDebugAndroidTest; else gradle -p android --no-daemon :app:connectedDebugAndroidTest; fi
+            if [ "$ART_PREVIEW" = true ]; then gradle -p android --no-daemon -PcryptgraveArtPreview :app:connectedDebugAndroidTest; elif [ "$GAME_PREVIEW" = true ]; then gradle -p android --no-daemon -PcryptgraveGamePreview :app:connectedDebugAndroidTest; else gradle -p android --no-daemon :app:connectedDebugAndroidTest; fi
       - name: Prepare test APK
         run: |
           mkdir -p apk-preview
           if [ "$ART_PREVIEW" = true ]; then
             name=CRYPTGRAVE-0.9.1-art-rc1.apk
             cp docs/GAME009F_ART_RC.md apk-preview/RECETTE.md
+          elif [ "$GAME_PREVIEW" = true ]; then
+            name=CRYPTGRAVE-0.10.0-rc1-preview.apk
+            cp docs/GAME010E_RC1.md apk-preview/RECETTE.md
           else
-            name=CRYPTGRAVE-0.9.0-test.apk
-            cp docs/GAME008D_ANDROID.md apk-preview/RECETTE.md
+            name=CRYPTGRAVE-0.10.0-rc1-test.apk
+            cp docs/GAME010E_RC1.md apk-preview/RECETTE.md
           fi
           cp android/app/build/outputs/apk/debug/app-debug.apk "apk-preview/$name"
           git rev-parse HEAD > apk-preview/BUILD_SHA.txt
@@ -88,7 +94,7 @@ jobs:
           sha256sum -c SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ART_PREVIEW == 'true' && 'cryptgrave-art-rc1-android' || 'cryptgrave-android-test' }}
+          name: ${{ env.ART_PREVIEW == 'true' && 'cryptgrave-art-rc1-android' || env.GAME_PREVIEW == 'true' && 'cryptgrave-010-rc1-android' || 'cryptgrave-android-test' }}
           path: apk-preview/
           if-no-files-found: error
           retention-days: 30
