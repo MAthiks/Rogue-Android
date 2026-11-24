@@ -47,7 +47,7 @@ function createSession(html,seed){
   const hook=source.slice(0,source.indexOf(marker))+ 
     'return {newGame,move,activate,bandage,finish,hide,los,stepOK,canUseConsumable,useConsumable,healingLeft,save,restore,readHistory,buildDungeon,'+
     'eventChoiceAllowed,resolveEvent,specialRoomAllowed,resolveSpecialRoom,EXPLORATION_EVENTS,SPECIAL_ROOMS,'+
-    'resume:()=>{mode="game";hide()},state:()=>({S,map,seen,monsters,loot,stairs,features,terrain,selected,mode,messages}),'+
+    'resume:()=>{mode="game";hide()},state:()=>({S,map,seen,monsters,loot,stairs,features,terrain,selected,mode,messages,overlayOpen:!overlay.classList.contains("hidden")}),'+
     'catalogs:()=>({CLASSES,ATTR,BASE,GEAR_SLOTS,RARITIES,GEAR_BASES,WEAPONS,WEAPON_BASE_IDS,STYLES,ADV_TALENTS,SYNERGIES,CONSUMABLES,POUCH_CAP,EXPLORATION_EVENTS,RARE_ENCOUNTERS,DOCTRINES,BALANCE,GEAR_SETS,UNIQUES,BESTIARY,CREATURE_POWERS,EXTENDED_BOSSES,MERCHANTS,GOLD_CAP,SPECIAL_ROOMS,BIOMES,AI_FAMILY,BOSS_PHASE_PATTERN,'+
     'AFFIXES:AFFIXES.map(({value,...meta})=>({...meta,valuesByGrade:[1,2,3,4].map(g=>value(g))}))})};})();';
   const engine=vm.runInNewContext(hook,{document,localStorage,window:{},innerHeight:800,ResizeObserver:undefined,Math:math},{timeout:5000});
@@ -66,7 +66,7 @@ function createSession(html,seed){
     else if(type==='event'||type==='room'){
       const f=engine.state().features.find(v=>v.x===command.x&&v.y===command.y);
       const event=type==='event';
-      if(!f||f.type!==(event?'event':'specialRoom')||!(event?engine.eventChoiceAllowed:engine.specialRoomAllowed)(f,command.choice))throw Error('Choix invalide');
+      if(overlay.classList.contains('hidden')||!f||f.type!==(event?'event':'specialRoom')||!(event?engine.eventChoiceAllowed:engine.specialRoomAllowed)(f,command.choice))throw Error('Choix invalide');
       (event?engine.resolveEvent:engine.resolveSpecialRoom)(f,command.choice);
     }else if(type==='reload'){
       engine.save();if(!engine.restore())throw Error('Restauration impossible');engine.resume();
@@ -122,7 +122,7 @@ function route(d,target){
 }
 function campaign(html,id,seed,budget=400){
   const s=createSession(html,seed);s.start(id);
-  const catalogs=s.catalogs(),trace=[record(s)],commands=[];
+  const initialState=s.snapshot(),catalogs=s.catalogs(),trace=[record(s)],commands=[];
   let stuck=0,reason='budget',last=s.snapshot().S.turn;
   while(commands.length<budget){
     const d=s.snapshot(),p=d.S;
@@ -131,12 +131,12 @@ function campaign(html,id,seed,budget=400){
     const target=visible[0];
     const heal=p.bar.findIndex(i=>catalogs.CLASSES[id].skills[i][3]==='heal'&&!p.cool[i]&&p.res>=catalogs.CLASSES[id].skills[i][1]);
     let cmd;
-    if(p.hp*2<p.maxHp&&heal>=0&&(p.healUses??0)<3)cmd={type:'skill',slot:heal};
-    else if(p.hp*2<p.maxHp&&p.bandages>0)cmd={type:'bandage'};
+    if(!d.selected&&p.hp*2<p.maxHp&&heal>=0&&(p.healUses??0)<3)cmd={type:'skill',slot:heal};
+    else if(d.selected===null&&p.hp*2<p.maxHp&&p.bandages>0)cmd={type:'bandage'};
     else{
       const aligned=target&&(target.x===p.x||target.y===p.y||Math.abs(target.x-p.x)===Math.abs(target.y-p.y));
       const skill=p.bar[0],spec=catalogs.CLASSES[id].skills[skill];
-      if(target&&p.cool[skill]===0&&p.res>=spec[1]&&((spec[3]==='ranged'&&aligned&&dist(target,p)<=5)||(spec[3]==='direction'&&dist(target,p)===1))&&!d.selected)
+      if(target&&p.cool[skill]===0&&p.res>=spec[1]&&((spec[3]==='ranged'&&aligned&&dist(target,p)<=5)||(spec[3]==='direction'&&dist(target,p)===1))&&d.selected===null)
         cmd={type:'skill',slot:0};
       else cmd=route(d,target||d.monsters.find(m=>m.boss)||d.stairs);
     }
@@ -144,10 +144,11 @@ function campaign(html,id,seed,budget=400){
     // Si un déplacement ouvre une interaction, le prochain choix est explicite.
     const f=cmd.type==='move'?d.features.find(v=>v.x===p.x+cmd.dx&&v.y===p.y+cmd.dy):null;
     s.action(cmd);commands.push(cmd);trace.push(record(s));
-    if(f&&!f.spent&&['event','specialRoom'].includes(f.type)&&commands.length<budget){
+    if(d.selected===null&&f&&!f.spent&&['event','specialRoom'].includes(f.type)&&commands.length<budget){
       const next=s.snapshot();
-      if(!next.S.dead&&!next.S.ended){
-        const choices=(f.type==='event'?catalogs.EXPLORATION_EVENTS[f.eventId]:catalogs.SPECIAL_ROOMS[f.roomId])?.choices||[];
+      if(next.overlayOpen&&!next.S.dead&&!next.S.ended){
+        const choices=[...((f.type==='event'?catalogs.EXPLORATION_EVENTS[f.eventId]:catalogs.SPECIAL_ROOMS[f.roomId])?.choices||[])];
+        if(f.type==='event')choices.push(['skip']);
         // Les choix indisponibles ne consomment aucune action de simulation.
         for(const [choice] of choices){
           const c={type:f.type==='event'?'event':'room',x:f.x,y:f.y,choice};
@@ -160,7 +161,7 @@ function campaign(html,id,seed,budget=400){
     if(now.dead||now.ended){reason=now.ended||'death';break}
     if(stuck>=20){reason='policy-stall';break}
   }
-  return {id,seed,reason,commands,trace,final:record(s),history:s.history()};
+  return {id,seed,reason,commands,trace,initialState,finalState:s.snapshot(),final:record(s),history:s.history()};
 }
 
 function referencePack(html){
