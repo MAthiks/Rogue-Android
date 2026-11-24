@@ -53,6 +53,8 @@ jobs:
         run: node tests/game010c.cjs
       - name: Verify expanded exploration and secret chambers
         run: node tests/game010d.cjs
+      - name: Verify campaign progression and build balance
+        run: node tests/game010e.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
