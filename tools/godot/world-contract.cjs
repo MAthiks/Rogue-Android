@@ -2,19 +2,36 @@
 // TECH-014 — Effets du monde, transactions et clôture du tour.
 // Les fonctions historiques sont adaptées à un état explicite. Les ports
 // réalisent les effets externes (RNG, combat, journal, génération, persistance).
-// Aucun DOM, aucune écriture disque. Les règles de déplacement et de ciblage
-// complètes demeurent exécutables via reference.cjs, oracle de commandes.
-const {dist,geometry}=require('./simulation-contract.cjs');
+// Aucun DOM, aucune écriture disque. La génération et la fin de partie restent des ports explicites ; reference.cjs
+// demeure l'oracle de commandes complet.
+const {dist,geometry,combat}=require('./simulation-contract.cjs');
 const domain=require('./domain-contract.cjs');
 const {tactics}=require('./tactical-contract.cjs');
 function world(state,catalogs,ports){
  const W=48,H=32;
- const {CONSUMABLES,POUCH_CAP,MERCHANTS,GEAR_SLOTS,GOLD_CAP,EXPLORATION_EVENTS,SPECIAL_ROOMS,EXTENDED_BOSSES}=catalogs;
+ const {CONSUMABLES,POUCH_CAP,MERCHANTS,GEAR_SLOTS,GOLD_CAP,EXPLORATION_EVENTS,SPECIAL_ROOMS,EXTENDED_BOSSES,WEAPONS,STYLES,CLASSES,BIOMES}=catalogs;
  const {bossAction,extendedBossAction,creatureAction,prepareCoordinatedIntent,tacticalTurn,coordinatedAction}=tactics(catalogs);
- const required=['say','die','item','rand','kill','enemyAttack','resourceRegen','update','save','combatFx','createGear','gainXP'];
+ const required=['say','rand','update','save','combatFx','generate','endRun'];
  for(const key of required)if(typeof ports[key]!=='function')throw Error('Port monde manquant : '+key);
- const {say,die,item,rand,kill,enemyAttack,resourceRegen,update,save,combatFx,createGear,gainXP}=ports;
+ const {say,rand,update,save,combatFx,generate,endRun}=ports;
+ const FINAL_FLOOR=30;
+ const die=()=>endRun('death');
+ const gear=domain.items(catalogs);
+ const createGear=(id,floor,min=1,rng=rand,forced=null)=>gear.createGear(id,floor,min,rng,forced);
+ const item=forcedTier=>createGear(++state.S.serial,state.S.floor,1,rand,forcedTier===2?3:null);
+ const gainXP=n=>domain.gainXP(state.S,n).forEach(say);
+ const enemyXP=domain.enemyXP,goldReward=domain.goldReward,bandageValue=domain.bandageValue;
+ const healingLeft=()=>domain.healingLeft(state.S);
+ const unlocked=i=>i<3||!!state.S.activeTalents[i];
+ const currentBiome=()=>BIOMES[state.S.dungeon?.biome]||BIOMES.crypt;
+ const talent=domain.talents(state.S,catalogs);
+ const {talentBonus,synergyDamage,synergyHeal,synergyGuard,synergyShield,synergyDuration,hasSynergy}=talent;
+ const {criticalChance,dodgeChance,outgoingDamage,incomingDamage,resourceRegen}=combat(state.S,{bonus:k=>gear.bonus(state.S.equip,k),talentBonus,weaponFamily,currentStyle,synergyDamage});
+ const merchantMenu=f=>{if(!merchantAvailable(f)){say('Commerce indisponible : éloigne les ennemis.');return}state.selected=null;state.overlayOpen=true};
+ const explorationMenu=f=>{if(EXPLORATION_EVENTS[f.eventId]&&!f.spent){state.selected=null;state.overlayOpen=true}};
+ const specialRoomMenu=f=>{if(SPECIAL_ROOMS[f.roomId]&&!f.spent){state.selected=null;state.overlayOpen=true}};
  const idx=(x,y)=>y*W+x;
+ const clear=(x,y)=>geometry(W,H,state.map).clear(x,y);
  const stepOK=(...args)=>geometry(W,H,state.map).stepOK(...args);
  const los=(x,y)=>geometry(W,H,state.map).los(state.S,x,y);
  const mob=(x,y)=>state.monsters.find(m=>m.hp>0&&m.x===x&&m.y===y);
@@ -343,6 +360,285 @@ function resolveSpecialRoom(f,choice){
  else if(choice==='treasuryGear')state.S.bag.push(createGear(++state.S.serial,floor,4));
  say(SPECIAL_ROOMS[f.roomId].name+' : choix résolu.');finish();return true;
 }
- return {featureAt,searchNearby,interactFeature,triggerTrap,enterTerrain,collectLoot,enemyPhase,finish,pouchCount,addConsumable,rollConsumable,consumableTargets,canUseConsumable,useConsumable,merchantAvailable,canBuy,buyMerchant,canSell,sellMerchant,eventChoiceAllowed,resolveEvent,specialRoomAllowed,resolveSpecialRoom};
+function hit(m,damage,profile=null){
+  const critical=rand(100)<criticalChance(profile),
+        d=outgoingDamage(m,damage,profile,critical);
+  if(critical&&talentBonus('bleed'))
+    m.bleed=Math.max(m.bleed||0,talentBonus('bleed'));
+  m.hp-=d;
+  state.S.boost=0;
+  if(los(m.x,m.y))combatFx(critical?'critical':'hit',d);
+  say(m.kind+' : -'+d+' PV');
+  if(m.hp<=0)kill(m)
+}
+
+function kill(m){
+  if(!state.monsters.includes(m))return;
+  state.monsters=state.monsters.filter(x=>x!==m);
+  state.S.gold=Math.min(GOLD_CAP,goldBalance()+goldReward(m,state.S.floor));
+  state.S.kills++;
+  gainXP(enemyXP(m,state.S.floor));
+  if(m.boss)
+    state.loot.unshift({x:m.x,y:m.y,kind:'gear',item:Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossReward(m):bossReward(m)});
+  else if(m.rare){
+    state.loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++state.S.serial,state.S.floor,4)},
+              {x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(state.S.floor)})
+  }else if(m.affix)
+    state.loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});
+  else if(rand(5)===0){
+    const gear=rand(3)===0;
+    state.loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})
+  }
+  if(!m.boss&&!m.affix&&rand(12)===0)
+    state.loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(state.S.floor)});
+  say(m.kind+' vaincu !')
+}
+
+function bossReward(m){
+  const slot=m.boss==='stone'?'armor':m.boss==='ash'?'weapon':'ring';
+  return {id:++state.S.serial,slot,name:({stone:'Cuirasse de Kharok',ash:'Lame de Syrha',veil:'Anneau de Veyl'})[m.boss],atk:slot==='weapon'?4:slot==='ring'?2:0,def:slot==='armor'?4:0,crit:slot==='ring'?6:0,regen:slot==='ring'?1:0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,state.S.floor)),uniqueId:'boss-'+m.boss,...(slot==='weapon'?{family:'blade'}:{})};
+}
+
+function eliteReward(){return item(2)}
+
+function enemyAttack(m,ranged,power=0,drain=false){
+  if(state.S.veil>0){state.S.veil=0;say('Attaque évitée par Disparition.');return}
+  if(rand(100)<dodgeChance()){say('Attaque esquivée.');return}
+  let dmg=incomingDamage(m,power,rand(2));
+  /* TECH-012C — Le bouclier absorbe les dégâts après la réduction défensive. */
+  if(state.S.shield>0){let absorbed=Math.min(dmg,state.S.shield);state.S.shield-=absorbed;dmg-=absorbed}
+  const actual=Math.min(state.S.hp,dmg);
+  state.S.hp=Math.max(0,state.S.hp-dmg);
+  combatFx(actual>0?'hurt':'guard',actual>0?actual:undefined);
+  if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));
+  say(m.kind+(ranged?(m.species?' lance un projectile : -':' te décoche une flèche : -'):' te frappe : -')+dmg+' PV');
+  if(drain&&actual>0){
+    const n=Math.min(2,state.S.res);
+    state.S.res-=n;
+    say('Drain : -'+n+' ressources.')
+  }
+  if(state.S.hp===0)die();
+}
+
+function move(dx,dy){
+  if(state.mode!=='game'||state.overlayOpen)return;
+  if(state.selected!==null){
+    if(state.selected==='weapon')useWeaponDirection(dx,dy);
+    else useDirection(dx,dy);
+    return
+  }
+  let x=state.S.x+dx,y=state.S.y+dy;
+  const f=featureAt(x,y);
+  /* TECH-012C — Une interaction en diagonale respecte la même contrainte d'angle que le déplacement. */
+  const legalAngle=!dx||!dy||clear(state.S.x+dx,state.S.y)&&clear(state.S.x,state.S.y+dy);
+  if(legalAngle&&!mob(x,y)&&f?.type==='merchant'&&stepOK(x,y,state.S.x,state.S.y)){
+    merchantMenu(f);
+    return
+  }
+  if(legalAngle&&!mob(x,y)&&f?.type==='specialRoom'&&!f.spent&&stepOK(x,y,state.S.x,state.S.y)){
+    specialRoomMenu(f);
+    return
+  }
+  if(legalAngle&&!mob(x,y)&&f?.type==='event'&&!f.spent&&stepOK(x,y,state.S.x,state.S.y)){
+    explorationMenu(f);
+    return
+  }
+  if(legalAngle&&!mob(x,y)&&interactFeature(f)){
+    finish();
+    return
+  }
+  if(!stepOK(x,y,state.S.x,state.S.y)){
+    say('Passage ou angle bloqué.');
+    return
+  }
+  let m=mob(x,y);
+  if(m){
+    hit(m,2+rand(3),basicProfile(m));
+    finish();
+    return
+  }
+  state.S.x=x;
+  state.S.y=y;
+  triggerTrap(x,y);
+  if(state.S.dead)return;
+  enterTerrain(x,y);
+  if(state.S.dead)return;
+  collectLoot(x,y);
+  /* TECH-012C — La descente est bloquée tant qu'un boss survit ou qu'un butin encombre les escaliers. */
+  if(x===state.stairs.x&&y===state.stairs.y){
+    if(state.monsters.some(m=>m.boss&&m.hp>0)){
+      say('Le boss doit être vaincu avant de descendre.');
+      finish();
+      return
+    }
+    if(state.loot.some(l=>l.x===x&&l.y===y)){
+      say('Butin sur les escaliers : libère de la place avant de descendre.');
+      finish();
+      return
+    }
+  /* TECH-012C — La sortie du dernier étage valide la victoire sans générer un nouvel étage. */
+    if(state.S.floor>=FINAL_FLOOR){
+      state.S.turn++;
+      endRun('victory');
+      return
+    }
+    state.S.floor++;
+    const recovery=4+Math.floor(Math.min(30,state.S.floor-1)/6);
+    const recovered=Math.min(recovery,state.S.maxHp-state.S.hp);
+    state.S.hp+=recovered;
+    state.S.res=state.S.maxRes;
+    generate();
+    say('Étage '+state.S.floor+' · '+currentBiome().name+' · +'+recovered+' PV.')
+  }
+  finish()
+}
+
+function activate(i){
+  if(state.mode!=='game'||state.overlayOpen)return;
+  i=state.S.bar[i];
+  if(!unlocked(i))return;
+  let c=CLASSES[state.S.classId],sk=c.skills[i],cost=sk[1];
+  if(state.S.cool[i]||state.S.res<cost){
+    say('Compétence indisponible.');
+    return
+  }
+  /* TECH-012C — Une compétence directionnelle attend une cible : aucun coût n'est encore prélevé. */
+  if(sk[3]==='direction'||sk[3]==='ranged'){
+    state.selected=state.selected===i?null:i;
+    say(state.selected===null?'Ciblage annulé.':'Choisis une direction sur le pavé.');
+    update();
+    return
+  }
+  if(sk[3]==='heal'&&!healingLeft()){
+    say('Soins de compétence épuisés pour cet étage.');
+    return
+  }
+  if(sk[3]==='heal'&&state.S.hp===state.S.maxHp){
+    say('PV déjà au maximum.');
+    return
+  }
+  state.selected=null;
+  state.S.res-=cost;
+  /* TECH-012C — Le tour de lancement décrémente aussi la recharge ; ajouter un tour conserve la durée annoncée. */
+  state.S.cool[i]=sk[2]+1;
+  if(sk[3]==='heal'){
+    state.S.healUses=(state.S.healUses||0)+1;
+    let n=Math.min(7+state.S.level+talentBonus('heal')+synergyHeal()+2*(state.S.ranks[i]-1)+Math.floor(state.S.attrs[4]/3)+(i===4?5:0),state.S.maxHp-state.S.hp);
+    state.S.hp+=n;
+    if(i===4&&state.S.classId==='ranger')state.S.res=Math.min(state.S.maxRes,state.S.res+4);
+    if(hasSynergy('reserve'))state.S.res=Math.min(state.S.maxRes,state.S.res+2);
+    combatFx('heal',n);
+    say('Soin : +'+n+' PV.')
+  }else if(sk[3]==='guard'){
+    state.S.guard=2+state.S.ranks[i]+(i===4?3:0)+talentBonus('guard')+synergyGuard();
+    if(i===4&&state.S.classId==='rogue')state.S.veil=3;
+    if(state.S.classId==='mage')state.S.shield=Math.max(state.S.shield,4+state.S.ranks[i]*2+(i===4?6:0)+talentBonus('shield')+synergyShield());
+    combatFx('guard');
+    say('Protection activée.')
+  }else{
+    state.S.boost=3+state.S.ranks[i];
+    say('Prochaine attaque renforcée.')
+  }
+  finish()
+}
+
+function useDirection(dx,dy){
+  let i=state.selected;
+  state.selected=null;
+  let sk=CLASSES[state.S.classId].skills[i],target=null,targets=[];
+  if(!unlocked(i)||state.S.cool[i]||state.S.res<sk[1]){
+    update();
+    return
+  }
+  if(sk[3]==='direction'){
+    let x=state.S.x+dx,y=state.S.y+dy;
+    if(stepOK(x,y,state.S.x,state.S.y))target=mob(x,y)
+  }else{
+    for(let k=1;k<=5;k++){
+      let x=state.S.x+dx*k,y=state.S.y+dy*k;
+      if(!clear(x,y))break;
+      if(!stepOK(x,y,x-dx,y-dy))break;
+      let m=mob(x,y);
+      if(m){
+        targets.push(m);
+        target??=m;
+        if(!(i===3&&state.S.classId==='ranger'))break
+      }
+    }
+  }
+  /* TECH-012C — Une direction sans cible ne dépense ni ressource ni tour. */
+  if(!target){
+    say('Aucune cible dans cette direction.');
+    update();
+    return
+  }
+  state.S.res-=sk[1];
+  state.S.cool[i]=sk[2]+1;
+  let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(state.S.level/3)+2*(state.S.ranks[i]-1)+(i===3?4+(state.S.nodes.o2?2:0):0);
+  if(state.S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;
+  hit(target,damage,{skill:true,ranged:sk[3]==='ranged',index:i});
+  if(state.monsters.includes(target)){
+    if(state.S.classId==='warrior'&&i===3)target.exposed=Math.max(target.exposed||0,synergyDuration('exposed',target));
+    if(state.S.classId==='rogue')target.bleed=Math.max(target.bleed||0,synergyDuration('bleed',target));
+    if(state.S.classId==='mage'&&i===3)target.stun=Math.max(target.stun||0,synergyDuration('stun',target))
+  }
+  if(state.S.classId==='ranger'&&i===3)
+    for(const m of targets.slice(1))
+      if(state.monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true,index:i,secondary:true});
+  finish(false,true)
+}
+
+function bandage(){
+  if(state.mode!=='game'||state.overlayOpen||
+     state.S.bandages<1||state.S.hp===state.S.maxHp)return;
+  state.selected=null;
+  state.S.bandages--;
+  let n=Math.min(bandageValue(state.S.level)+talentBonus('bandage'),state.S.maxHp-state.S.hp);
+  state.S.hp+=n;
+  combatFx('heal',n);
+  say('Bandage : +'+n+' PV.');
+  finish()
+}
+
+function weaponFamily(it){
+  if(!it||it.slot!=='weapon')return null;
+  if(it.family&&Object.hasOwn(WEAPONS,it.family))return it.family;
+  return null
+}
+
+function currentWeapon(){
+  return WEAPONS[weaponFamily(state.S.equip.weapon)]??{name:'Arme classique',range:1,cost:0,power:0,crit:0,desc:'Attaque de contact historique'}
+}
+
+function currentStyle(){return STYLES[Object.hasOwn(STYLES,state.S.combatStyle)?state.S.combatStyle:'balanced']}
+
+function basicProfile(target,atRange=false){
+  const w=currentWeapon(),style=currentStyle(),family=weaponFamily(state.S.equip.weapon);
+  return {...(atRange?{ranged:true}:{}),power:w.power+style.power+(!atRange&&family==='bow'?-1:!atRange&&family==='staff'?-2:0),crit:w.crit-(w.critPenalty||0),pierce:w.pierce||0};
+}
+
+function aimedTarget(dx,dy,range){
+  if(!Number.isInteger(dx)||!Number.isInteger(dy)||Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy))return null;
+  for(let k=1;k<=range;k++){const x=state.S.x+dx*k,y=state.S.y+dy*k;if(!stepOK(x,y,x-dx,y-dy))break;const m=mob(x,y);if(m)return {m,distance:k}}
+  return null;
+}
+
+function aimWeapon(){
+  if(state.mode!=='game'||state.overlayOpen)return;
+  const w=currentWeapon();if(w.range<=1||state.S.res<w.cost){say('Attaque à distance indisponible.');return}
+  state.selected=state.selected==='weapon'?null:'weapon';say(state.selected===null?'Ciblage annulé.':'Arme : choisis une direction sur le pavé.');update();
+}
+
+function useWeaponDirection(dx,dy){
+  state.selected=null;const w=currentWeapon(),t=aimedTarget(dx,dy,w.range);
+  if(w.range<=1||!t||state.S.res<w.cost){say('Aucune cible accessible ou ressource insuffisante.');update();return}
+  state.S.res-=w.cost;hit(t.m,2+rand(3),basicProfile(t.m,t.distance>1));finish(w.cost>0);
+}
+
+function extendedBossReward(m){
+ const b=EXTENDED_BOSSES[m.boss];
+ return {id:++state.S.serial,slot:b.slot,name:b.relic,atk:b.atk||0,def:b.def||0,crit:b.crit||0,regen:b.regen||0,dodge:b.dodge||0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,state.S.floor)),uniqueId:'boss-'+m.boss,...(b.family?{family:b.family}:{})};
+}
+ return {move,activate,bandage,aimWeapon,hit,enemyAttack,kill,featureAt,searchNearby,interactFeature,triggerTrap,enterTerrain,collectLoot,enemyPhase,finish,pouchCount,addConsumable,rollConsumable,consumableTargets,canUseConsumable,useConsumable,merchantAvailable,canBuy,buyMerchant,canSell,sellMerchant,eventChoiceAllowed,resolveEvent,specialRoomAllowed,resolveSpecialRoom};
 }
 module.exports={world};
