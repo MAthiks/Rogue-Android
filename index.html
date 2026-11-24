@@ -206,7 +206,26 @@ function save(){
   }
 }
 /* TECH-012A — Vérifie les données persistées avant de restaurer le donjon et le personnage. Retourne false si la sauvegarde est absente ou invalide, puis applique la migration si elle est valide. */
-function restore(){clearCombatFx();S=null;selected=null;try{let d=JSON.parse(localStorage.getItem(KEY));if(!d||!Object.hasOwn(CLASSES,d.S?.classId)||d.S.dead||d.S.ended||d.map.length!==W*H||d.seen.length!==W*H||!Array.isArray(d.monsters)||!Array.isArray(d.loot)||!d.stairs)return false;({S,map,seen,monsters,loot,stairs}=d);features=Array.isArray(d.features)?d.features:[];terrain=Array.isArray(d.terrain)?d.terrain:[];migrate();return true}catch(e){S=null;selected=null;return false}}
+function restore(){
+  clearCombatFx();
+  S=null;
+  selected=null;
+  try{
+    let d=JSON.parse(localStorage.getItem(KEY));
+    if(!d||!Object.hasOwn(CLASSES,d.S?.classId)||d.S.dead||d.S.ended||
+       d.map.length!==W*H||d.seen.length!==W*H||
+       !Array.isArray(d.monsters)||!Array.isArray(d.loot)||!d.stairs)return false;
+    ({S,map,seen,monsters,loot,stairs}=d);
+    features=Array.isArray(d.features)?d.features:[];
+    terrain=Array.isArray(d.terrain)?d.terrain:[];
+    migrate();
+    return true
+  }catch(e){
+    S=null;
+    selected=null;
+    return false
+  }
+}
 const ATTR=['Force','Dextérité','Constitution','Volonté','Intelligence','Perception'];
 const BASE={warrior:[4,2,4,2,1,2],rogue:[2,4,2,2,1,4],ranger:[2,4,2,3,1,4],mage:[1,2,2,4,4,2]};
 /* TECH-012A — Complète les champs absents des anciennes sauvegardes et remet en état la barre de compétences. Le compteur d'objets doit rester au moins égal aux identifiants déjà attribués. */
@@ -604,7 +623,12 @@ function setCount(equip,key){const set=GEAR_SETS[key];return set?Object.entries(
 function setBonus(equip,k){return Object.keys(GEAR_SETS).reduce((n,key)=>{const count=setCount(equip,key),set=GEAR_SETS[key];return n+(count>=2?(set.two[k]||0):0)+(count>=3?(set.three[k]||0):0)},0)}
 /* TECH-012C — Additionne les propriétés des objets équipés et les bonus d'ensemble pour la statistique demandée. */
 function bonus(k){return Object.values(S.equip).reduce((n,i)=>n+(i?.[k]||0),0)+setBonus(S.equip,k)}
-function rarityOf(it){if(Number.isInteger(it.rarity)&&it.rarity>=1&&it.rarity<=5)return it.rarity;if(it.bossRelic)return 5;return it.name?.startsWith('Épique')?4:it.name?.startsWith('Rare')?3:1}
+/* TECH-012C — Normalise la rareté des objets, y compris les anciens objets dépourvus de métadonnée de rareté. */
+function rarityOf(it){
+  if(Number.isInteger(it.rarity)&&it.rarity>=1&&it.rarity<=5)return it.rarity;
+  if(it.bossRelic)return 5;
+  return it.name?.startsWith('Épique')?4:it.name?.startsWith('Rare')?3:1
+}
 function rollRarity(floor,roll,minimum=1){
   const depth=Math.max(1,Math.min(30,floor)),shift=Math.floor((depth-1)/5);
   const tier=roll<1+shift?5:roll<5+2*shift?4:roll<20+4*shift?3:roll<45+5*shift?2:1;
@@ -1580,9 +1604,40 @@ function bossReward(m){
   return {id:++S.serial,slot,name:({stone:'Cuirasse de Kharok',ash:'Lame de Syrha',veil:'Anneau de Veyl'})[m.boss],atk:slot==='weapon'?4:slot==='ring'?2:0,def:slot==='armor'?4:0,crit:slot==='ring'?6:0,regen:slot==='ring'?1:0,bossRelic:true,rarity:5,itemLevel:Math.max(1,Math.min(30,S.floor)),uniqueId:'boss-'+m.boss,...(slot==='weapon'?{family:'blade'}:{})};
 }
 function eliteReward(){return item(2)}
-function kill(m){if(!monsters.includes(m))return;monsters=monsters.filter(x=>x!==m);S.gold=Math.min(GOLD_CAP,goldBalance()+goldReward(m,S.floor));S.kills++;gainXP(enemyXP(m,S.floor));if(m.boss)loot.unshift({x:m.x,y:m.y,kind:'gear',item:Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossReward(m):bossReward(m)});else if(m.rare){loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++S.serial,S.floor,4)},{x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)})}else if(m.affix)loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});else if(rand(5)===0){const gear=rand(3)===0;loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})}if(!m.boss&&!m.affix&&rand(12)===0)loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)});say(m.kind+' vaincu !')}
+/* TECH-012C — Retire un ennemi vaincu, attribue or et expérience, puis distribue le butin selon son type et les tirages aléatoires. */
+function kill(m){
+  if(!monsters.includes(m))return;
+  monsters=monsters.filter(x=>x!==m);
+  S.gold=Math.min(GOLD_CAP,goldBalance()+goldReward(m,S.floor));
+  S.kills++;
+  gainXP(enemyXP(m,S.floor));
+  if(m.boss)
+    loot.unshift({x:m.x,y:m.y,kind:'gear',item:Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossReward(m):bossReward(m)});
+  else if(m.rare){
+    loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++S.serial,S.floor,4)},
+              {x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)})
+  }else if(m.affix)
+    loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});
+  else if(rand(5)===0){
+    const gear=rand(3)===0;
+    loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})
+  }
+  if(!m.boss&&!m.affix&&rand(12)===0)
+    loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)});
+  say(m.kind+' vaincu !')
+}
 /* TECH-012A — Résout l'attaque du joueur contre un ennemi : critique, dégâts, effets de talent, retour visuel et traitement de la mort si les PV tombent à zéro. */
-function hit(m,damage,profile=null){const critical=rand(100)<criticalChance(profile),d=outgoingDamage(m,damage,profile,critical);if(critical&&talentBonus('bleed'))m.bleed=Math.max(m.bleed||0,talentBonus('bleed'));m.hp-=d;S.boost=0;if(los(m.x,m.y))combatFx(critical?'critical':'hit',d);say(m.kind+' : -'+d+' PV');if(m.hp<=0)kill(m)}
+function hit(m,damage,profile=null){
+  const critical=rand(100)<criticalChance(profile),
+        d=outgoingDamage(m,damage,profile,critical);
+  if(critical&&talentBonus('bleed'))
+    m.bleed=Math.max(m.bleed||0,talentBonus('bleed'));
+  m.hp-=d;
+  S.boost=0;
+  if(los(m.x,m.y))combatFx(critical?'critical':'hit',d);
+  say(m.kind+' : -'+d+' PV');
+  if(m.hp<=0)kill(m)
+}
 /* TECH-012A — Évalue les actions tactiques d'un ennemi à partir de son rôle, de la carte et des acteurs. Les déplacements candidats doivent respecter les obstacles et l'occupation des cases. */
 function tacticalTurn(m,player,all,board,contacts){
   const {W,H,stepOK}=board,dist=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),key=p=>p.y*W+p.x;
@@ -1760,7 +1815,9 @@ function finish(rangedWeapon=false,offensiveSkill=false){
   save()
 }
 /* TECH-012A — Délègue la mort permanente à la procédure commune de fin de partie. */
-function die(){endRun('death')}
+function die(){
+  endRun('death')
+}
 /* TECH-012A — Ramasse les objets présents sur la case. Les objets qui ne tiennent pas dans le sac ou la sacoche restent au sol. */
 function collectLoot(x,y){
   let full=false;
@@ -1779,7 +1836,18 @@ function move(dx,dy){if(mode!=='game'||!overlay.classList.contains('hidden'))ret
 function activate(i){if(mode!=='game'||!overlay.classList.contains('hidden'))return;i=S.bar[i];if(!unlocked(i))return;let c=CLASSES[S.classId],sk=c.skills[i],cost=sk[1];if(S.cool[i]||S.res<cost){say('Compétence indisponible.');return}if(sk[3]==='direction'||sk[3]==='ranged'){selected=selected===i?null:i;say(selected===null?'Ciblage annulé.':'Choisis une direction sur le pavé.');update();return}if(sk[3]==='heal'&&!healingLeft()){say('Soins de compétence épuisés pour cet étage.');return}if(sk[3]==='heal'&&S.hp===S.maxHp){say('PV déjà au maximum.');return}selected=null;S.res-=cost;S.cool[i]=sk[2]+1;if(sk[3]==='heal'){S.healUses=(S.healUses||0)+1;let n=Math.min(7+S.level+talentBonus('heal')+synergyHeal()+2*(S.ranks[i]-1)+Math.floor(S.attrs[4]/3)+(i===4?5:0),S.maxHp-S.hp);S.hp+=n;if(i===4&&S.classId==='ranger')S.res=Math.min(S.maxRes,S.res+4);if(hasSynergy('reserve'))S.res=Math.min(S.maxRes,S.res+2);combatFx('heal',n);say('Soin : +'+n+' PV.')}else if(sk[3]==='guard'){S.guard=2+S.ranks[i]+(i===4?3:0)+talentBonus('guard')+synergyGuard();if(i===4&&S.classId==='rogue')S.veil=3;if(S.classId==='mage')S.shield=Math.max(S.shield,4+S.ranks[i]*2+(i===4?6:0)+talentBonus('shield')+synergyShield());combatFx('guard');say('Protection activée.')}else{S.boost=3+S.ranks[i];say('Prochaine attaque renforcée.')}finish()}
 /* TECH-012A — Résout la compétence sélectionnée dans une direction et recherche les cibles admissibles. Vérifie les ressources et le temps de recharge avant de dépenser le coût. */
 function useDirection(dx,dy){let i=selected;selected=null;let sk=CLASSES[S.classId].skills[i],target=null,targets=[];if(!unlocked(i)||S.cool[i]||S.res<sk[1]){update();return}if(sk[3]==='direction'){let x=S.x+dx,y=S.y+dy;if(stepOK(x,y,S.x,S.y))target=mob(x,y)}else{for(let k=1;k<=5;k++){let x=S.x+dx*k,y=S.y+dy*k;if(!clear(x,y))break;if(!stepOK(x,y,x-dx,y-dy))break;let m=mob(x,y);if(m){targets.push(m);target??=m;if(!(i===3&&S.classId==='ranger'))break}}}if(!target){say('Aucune cible dans cette direction.');update();return}S.res-=sk[1];S.cool[i]=sk[2]+1;let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(S.level/3)+2*(S.ranks[i]-1)+(i===3?4+(S.nodes.o2?2:0):0);if(S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;hit(target,damage,{skill:true,ranged:sk[3]==='ranged',index:i});if(monsters.includes(target)){if(S.classId==='warrior'&&i===3)target.exposed=Math.max(target.exposed||0,synergyDuration('exposed',target));if(S.classId==='rogue')target.bleed=Math.max(target.bleed||0,synergyDuration('bleed',target));if(S.classId==='mage'&&i===3)target.stun=Math.max(target.stun||0,synergyDuration('stun',target))}if(S.classId==='ranger'&&i===3)for(const m of targets.slice(1))if(monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true,index:i,secondary:true});finish(false,true)}
-function bandage(){if(mode!=='game'||!overlay.classList.contains('hidden')||S.bandages<1||S.hp===S.maxHp)return;selected=null;S.bandages--;let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);S.hp+=n;combatFx('heal',n);say('Bandage : +'+n+' PV.');finish()}
+/* TECH-012C — Consomme un bandage uniquement si le personnage peut se soigner. La guérison est plafonnée aux PV manquants et consomme un tour. */
+function bandage(){
+  if(mode!=='game'||!overlay.classList.contains('hidden')||
+     S.bandages<1||S.hp===S.maxHp)return;
+  selected=null;
+  S.bandages--;
+  let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);
+  S.hp+=n;
+  combatFx('heal',n);
+  say('Bandage : +'+n+' PV.');
+  finish()
+}
 // GAME-007F: cosmetic HUD, pixel glyphs, transient combat feedback.
 const SKILL_ART={
  warrior:[[2,6,12,24,48,24,36],[28,34,73,85,73,34,28],[62,99,107,107,54,28,8],[65,42,28,127,28,42,65],[127,73,93,93,42,28,8]],
