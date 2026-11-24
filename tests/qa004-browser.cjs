@@ -142,6 +142,14 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.equal((await read()).monsters[0].phase,3);
     await page.locator('[data-d="-1,0"]').tap();
     let bossAvoided=await read();assert.equal(bossAvoided.S.hp,30);assert.equal(bossAvoided.S.x,5);assert.equal(bossAvoided.monsters[0].intent,undefined);assert.equal(bossAvoided.monsters[0].specialCD,2);
+    // GAME-006D: touch merchant, buy/sell, persist stock and wallet.
+    const fixture10=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.S.gold=100;d.S.bag=[];d.monsters=[];d.terrain=[];d.loot=[];d.features=[{x:7,y:6,type:'merchant',merchantId:'arms',found:true,stock:[{kind:'gear',item:{slot:'armor',name:'Armure de test',rarity:1,itemLevel:5,def:1},price:22,qty:1}]}];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-10')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-10','1')}},{key,data:fixture10});
+    await page.reload();await page.locator('#resume').tap();await page.locator('[data-d="1,0"]').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Armurier itinérant'));
+    await page.locator('[data-buy="0"]').tap();let bought=await read();assert.equal(bought.S.gold,78);assert.equal(bought.features[0].stock[0].qty,0);assert.equal(bought.S.bag.length,1);assert.equal(bought.S.x,6);
+    await page.locator('#shopSell').tap();await page.locator('[data-sell]').tap();let sold=await read();assert.equal(sold.S.gold,86);assert.equal(sold.S.bag.length,0);
+    await page.locator('#shopBack').tap();await page.reload();await page.locator('#resume').tap();assert.equal((await read()).S.gold,86);assert.equal((await read()).features[0].stock[0].qty,0);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
