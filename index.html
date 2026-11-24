@@ -391,7 +391,81 @@ function endRun(outcome){
  const result=()=>{show('<h1>'+outcomeLabel(outcome)+'</h1>'+(outcome==='victory'?'<p>Le dernier gardien est tombé. Tu quittes le donjon victorieux.</p>':'')+summaryMarkup(r)+'<p>'+(saved?'Bilan enregistré sur cet appareil.':'Historique indisponible.')+'</p><button class="wide" id="endHistory">Panthéon et records</button><button class="wide" id="again">Nouvelle partie</button>');document.getElementById('endHistory').onclick=()=>historyMenu(result);document.getElementById('again').onclick=startMenu};
  result();return true;
 }
-function startMenu(){mode='start';clearCombatFx();document.getElementById('hudMeters').innerHTML='';const resume=!!localStorage.getItem(KEY);show('<h1>CRYPTGRAVE <small>Android</small></h1><p>Roguelike tactique en pixel art. Mort permanente, exploration procédurale et commandes exclusivement au pavé à huit directions.</p>'+(resume?'<button class="wide" id="resume">Reprendre la partie</button>':'')+'<button class="wide" id="startHistory">Panthéon et records</button><button class="wide" id="startopts">Options graphiques</button><h2>Nouvelle partie</h2><div class="classes">'+Object.entries(CLASSES).map(([k,c])=>`<button data-class="${k}">${classIcon(k)}<b>${c.name}</b><small>${c.desc}</small></button>`).join('')+'</div><p class="tiny">Une nouvelle partie remplace la sauvegarde précédente.</p>');document.getElementById('startopts').onclick=()=>options(startMenu);document.getElementById('startHistory').onclick=()=>historyMenu(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else{localStorage.removeItem(KEY);startMenu()}}}
+
+/* GAME-008E3: explicit, portable local transfer; no automatic checkpoints. */
+const TRANSFER_LIMIT=524288,TRANSFER_FORMAT='cryptgrave-transfer-v1';
+const transferObject=v=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.getPrototypeOf(v)===Object.prototype;
+const transferInt=(v,min=0,max=1000000000)=>Number.isInteger(v)&&v>=min&&v<=max;
+function transferAssert(ok){if(!ok)throw Error('Sauvegarde incompatible ou invalide.')}
+function transferTree(v,depth=0,budget={n:0}){
+ transferAssert(depth<=16&&++budget.n<=40000);
+ if(v===null||typeof v==='boolean')return;
+ if(typeof v==='number'){transferAssert(Number.isFinite(v)&&Math.abs(v)<=4294967296);return}
+ if(typeof v==='string'){transferAssert(v.length<=256&&!/[<>&"`\\\u0000-\u001f]/.test(v));return}
+ if(Array.isArray(v)){transferAssert(v.length<=4096);for(const x of v)transferTree(x,depth+1,budget);return}
+ transferAssert(transferObject(v));const keys=Object.keys(v);transferAssert(keys.length<=128);
+ for(const k of keys){transferAssert(/^[a-zA-Z0-9_-]{1,80}$/.test(k)&&!['__proto__','prototype','constructor'].includes(k));transferTree(v[k],depth+1,budget)}
+}
+function transferPoint(p){return transferObject(p)&&transferInt(p.x,0,W-1)&&transferInt(p.y,0,H-1)}
+function transferGear(it){
+ transferAssert(transferObject(it)&&transferInt(it.id,1)&&['weapon','armor','helmet','boots','ring'].includes(it.slot)&&typeof it.name==='string');
+ for(const k of ['atk','def','crit','regen','dodge','itemLevel','rarity'])if(it[k]!==undefined)transferAssert(transferInt(it[k],0,1000000));
+}
+function validateTransferRun(d){
+ if(d===null)return;
+ transferAssert(transferObject(d)&&transferObject(d.S));const s=d.S;
+ transferAssert(Object.hasOwn(CLASSES,s.classId)&&s.dead===false&&!s.ended&&transferPoint(s)&&transferPoint(d.stairs));
+ transferAssert(transferInt(s.floor,1,30)&&transferInt(s.level,1,30)&&transferInt(s.hp,1)&&transferInt(s.maxHp,1)&&s.hp<=s.maxHp&&transferInt(s.res)&&transferInt(s.maxRes,1)&&s.res<=s.maxRes);
+ for(const k of ['turn','xp','points','bandages','atk','armor','guard','boost','kills','serial','ap'])transferAssert(transferInt(s[k]));
+ for(const [k,n,min,max] of [['attrs',6,0,100000],['cool',5,0,100000],['ranks',5,1,100000],['bar',3,0,4]])transferAssert(Array.isArray(s[k])&&s[k].length===n&&s[k].every(v=>transferInt(v,min,max)));
+ transferAssert(new Set(s.bar).size===3&&s.bar.every(i=>i<3||s.activeTalents?.[i])&&transferObject(s.nodes)&&transferObject(s.activeTalents)&&[null,'offense','defense'].includes(s.spec));
+ transferAssert(Array.isArray(s.bag)&&s.bag.length<=24&&transferObject(s.equip));for(const it of s.bag)transferGear(it);
+ for(const slot of ['weapon','armor','helmet','boots','ring']){const it=s.equip[slot];if(it!==null){transferGear(it);transferAssert(it.slot===slot)}}
+ for(const k of ['map','seen'])transferAssert(Array.isArray(d[k])&&d[k].length===W*H&&d[k].every(v=>v===0||v===1));
+ transferAssert(d.map[s.y*W+s.x]===0&&d.map[d.stairs.y*W+d.stairs.x]===0);
+ for(const k of ['monsters','loot','features','terrain'])transferAssert(Array.isArray(d[k])&&d[k].length<=W*H&&d[k].every(transferPoint));
+ for(const m of d.monsters)transferAssert(transferInt(m.hp,1)&&transferInt(m.maxHp,1)&&m.hp<=m.maxHp&&transferInt(m.atk)&&typeof m.kind==='string'&&typeof m.color==='string'&&/^#[0-9a-fA-F]{6}$/.test(m.color)&&typeof m.role==='string');
+ for(const l of d.loot){transferAssert(['gear','bandage','consumable'].includes(l.kind));if(l.kind==='gear')transferGear(l.item)}
+ for(const p of [...d.features,...d.terrain])transferAssert(typeof p.type==='string');
+ if(s.dungeon!==undefined)transferAssert(transferObject(s.dungeon)&&Object.hasOwn(BIOMES,s.dungeon.biome));
+}
+function validateTransferHistory(h){
+ if(h===null)return;
+ transferAssert(transferObject(h)&&h.version===1&&Array.isArray(h.runs)&&h.runs.length<=HISTORY_LIMIT&&transferObject(h.classWins)&&Array.isArray(h.challenges)&&h.challenges.length<=4);
+ for(const k of ['total','wins','deaths','abandoned','bestScore','bestFloor','bestKills'])transferAssert(transferInt(h[k]));
+ transferAssert(h.fastestWin===null||transferInt(h.fastestWin));for(const k of Object.keys(CLASSES))transferAssert(transferInt(h.classWins[k]));
+ transferAssert(h.challenges.every(k=>['first-win','swift','collector','all-classes'].includes(k)));
+ for(const r of h.runs){transferAssert(transferObject(r)&&Object.hasOwn(CLASSES,r.classId)&&['victory','death','abandoned'].includes(r.outcome)&&[null,'offense','defense'].includes(r.spec));for(const k of ['floor','level','kills','turns','gold','relics','score'])transferAssert(transferInt(r[k]))}
+}
+function parseTransfer(text){
+ transferAssert(typeof text==='string'&&text.length>0&&text.length<=TRANSFER_LIMIT);const b=JSON.parse(text);transferTree(b);
+ transferAssert(transferObject(b)&&b.format===TRANSFER_FORMAT&&Object.keys(b).length===4);
+ validateTransferRun(b.run);validateTransferHistory(b.history);
+ transferAssert(transferObject(b.prefs)&&Object.keys(b.prefs).length===2&&[75,100,125,150,200].includes(b.prefs.zoom)&&[85,100,115].includes(b.prefs.pad));return b;
+}
+function exportTransfer(){
+ const raw=localStorage.getItem(KEY),h=localStorage.getItem(HISTORY_KEY);
+ const data=JSON.stringify({format:TRANSFER_FORMAT,run:raw===null?null:JSON.parse(raw),history:h===null?null:readHistory(),prefs:{zoom:prefs.zoom,pad:prefs.pad}});
+ parseTransfer(data);return data;
+}
+function importTransfer(text){
+ if(mode!=='start')throw Error('Retourne au menu principal.');
+ const b=parseTransfer(text),entries=[[KEY,b.run],[HISTORY_KEY,b.history],[PREF,b.prefs]],old=entries.map(([k])=>[k,localStorage.getItem(k)]);
+ try{for(const [k,v] of entries){if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}}
+ catch(e){let restored=true;for(const [k,v] of old)try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(err){restored=false}throw Error(restored?'Import impossible : données précédentes conservées.':'Stockage indisponible : vérifie tes données avant de continuer.')}
+ // Do not let the previous in-memory run overwrite the imported state on visibilitychange.
+ S=null;selected=null;prefs={...b.prefs};return b;
+}
+function transferMenu(){
+ if(mode!=='start')return;
+ show('<h1>Transfert de sauvegarde</h1><p>Copie le texte dans un fichier privé, puis colle-le sur le nouvel appareil. Un import remplace la partie, les records et les options. Un ancien export peut revenir à un état antérieur : à réserver aux migrations, pas aux reprises après une mort.</p><textarea id="transferData" aria-label="Texte de transfert" spellcheck="false" style="width:100%;height:140px;resize:vertical;background:#101318;color:#eee5d4;border:1px solid #514534"></textarea><button class="wide" id="transferExport">Exporter et sélectionner</button><button class="wide" id="transferImport">Importer le texte</button><p id="transferStatus" aria-live="polite"></p><button class="wide" id="transferBack">Retour</button>');
+ const field=document.getElementById('transferData'),status=document.getElementById('transferStatus');
+ document.getElementById('transferExport').onclick=()=>{try{field.value=exportTransfer();field.focus();field.select();status.textContent='Texte sélectionné. Utilise Copier dans le menu de sélection Android.'}catch(e){status.textContent='Export impossible : sauvegarde incompatible ou stockage indisponible.'}};
+ document.getElementById('transferImport').onclick=()=>{try{const b=parseTransfer(field.value);const label=b.run?CLASSES[b.run.S.classId].name+' · étage '+b.run.S.floor+' · tour '+b.run.S.turn:'Aucune partie active';if(!confirm('Importer '+label+' ? La partie, le Panthéon et les options actuels seront remplacés.'))return;importTransfer(field.value);applyPrefs();startMenu()}catch(e){status.textContent=e.message||'Import impossible.'}};
+ document.getElementById('transferBack').onclick=startMenu;
+}
+
+function startMenu(){mode='start';clearCombatFx();document.getElementById('hudMeters').innerHTML='';const resume=!!localStorage.getItem(KEY);show('<h1>CRYPTGRAVE <small>Android</small></h1><p>Roguelike tactique en pixel art. Mort permanente, exploration procédurale et commandes exclusivement au pavé à huit directions.</p>'+(resume?'<button class="wide" id="resume">Reprendre la partie</button>':'')+'<button class="wide" id="startHistory">Panthéon et records</button><button class="wide" id="startopts">Options graphiques</button><button class="wide" id="startTransfer">Transfert de sauvegarde</button><h2>Nouvelle partie</h2><div class="classes">'+Object.entries(CLASSES).map(([k,c])=>`<button data-class="${k}">${classIcon(k)}<b>${c.name}</b><small>${c.desc}</small></button>`).join('')+'</div><p class="tiny">Une nouvelle partie remplace la sauvegarde précédente.</p>');document.getElementById('startopts').onclick=()=>options(startMenu);document.getElementById('startTransfer').onclick=transferMenu;document.getElementById('startHistory').onclick=()=>historyMenu(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else{localStorage.removeItem(KEY);startMenu()}}}
 function newGame(id){let c=CLASSES[id];S={classId:id,x:0,y:0,hp:c.hp,maxHp:c.hp,res:c.maxRes,maxRes:c.maxRes,level:1,xp:0,points:0,floor:1,turn:0,bandages:3,atk:0,armor:0,guard:0,boost:0,cool:[0,0,0],kills:0,dead:false};migrate();selected=null;generate();mode='game';hide();say('Un nouveau destin commence · '+currentBiome().name+'.');update();save()}
 // GAME-006B: biome-specific species, independent deterministic stream.
 const BESTIARY={
