@@ -182,6 +182,30 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.reload();assert.equal(await page.locator('#resume').count(),0);await page.locator('#startHistory').tap();
     assert.ok((await page.locator('#panel').textContent()).includes('Victoires : 1'));await page.locator('#historyBack').tap();
     await page.locator('[data-class="rogue"]').tap();assert.equal((await read()).S.floor,1);assert.equal((await read()).S.classId,'rogue');
+    // GAME-007B: actual 16px center tile, same board and gear fixtures for each hero.
+    const playerPixels=()=>page.locator('canvas').evaluate(c=>{
+      const x=Math.floor(c.width/16/2)*16,y=Math.floor(c.height/16/2)*16;
+      return Array.from(c.getContext('2d').getImageData(x,y,16,16).data).join(',');
+    });
+    const heroFixture=await read(),heroPixels=new Set();
+    for(const [classId,family] of [['warrior','axe'],['rogue','dagger'],['ranger','bow'],['mage','staff']]){
+      const fixture=JSON.parse(JSON.stringify(heroFixture));fixture.S.classId=classId;
+      fixture.S.equip={weapon:null,armor:null,ring:null,helmet:null,boots:null};
+      fixture.S.bag=[{id:++fixture.S.serial,slot:'weapon',family,name:'Arme de test',rarity:3,atk:1,def:0,crit:0,regen:0,dodge:0}];
+      fixture.monsters=[];fixture.features=[];fixture.terrain=[];fixture.loot=[];
+      await page.evaluate(({key,fixture})=>localStorage.setItem(key,JSON.stringify(fixture)),{key,fixture});
+      await page.reload();await page.locator('#resume').tap();
+      const bare=await playerPixels();heroPixels.add(bare);
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-bare.png'});
+      await page.locator('#inventory').tap();await page.locator('[data-equip="'+fixture.S.bag[0].id+'"]').tap();
+      await page.locator('#close').tap();const equipped=await playerPixels(),saved=await read();
+      assert.notEqual(equipped,bare);assert.equal(saved.S.equip.weapon.family,family);
+      assert.equal(saved.S.turn,fixture.S.turn);assert.equal(saved.S.x,fixture.S.x);assert.equal(saved.S.y,fixture.S.y);
+      await page.reload();await page.locator('#resume').tap();
+      assert.equal(await playerPixels(),equipped);assert.deepEqual(await read(),saved);
+      if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/hero-'+classId+'-equipped.png'});
+    }
+    assert.equal(heroPixels.size,4);
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
