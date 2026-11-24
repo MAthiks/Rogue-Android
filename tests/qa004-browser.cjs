@@ -113,6 +113,15 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.locator('#inventory').tap();
     assert.ok((await page.locator('#panel').textContent()).includes('Combat effectif'));
     await page.locator('#close').tap();
+    // GAME-006A: a new biome and its hazard persist across mobile reload.
+    const fixture7=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.S.hp=30;d.S.maxHp=50;d.S.dungeon.biome='fungal';d.features=[];d.loot=[];d.monsters=[];d.terrain=[{x:7,y:6,type:'spores',spent:false}];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-7')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-7','1')}},{key,data:fixture7});
+    await page.reload();await page.locator('#resume').tap();
+    assert.equal(await page.locator('#biomeName').textContent(),'Grottes fongiques');
+    await page.locator('[data-d="1,0"]').tap();assert.equal((await read()).S.hp,28);
+    await page.reload();await page.locator('#resume').tap();
+    assert.equal(await page.locator('#biomeName').textContent(),'Grottes fongiques');
+    assert.equal((await read()).S.hp,28);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
