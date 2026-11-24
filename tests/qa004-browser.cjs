@@ -132,6 +132,16 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     assert.equal((await read()).monsters[0].species,'spitter');
     await page.locator('[data-d="0,1"]').tap();
     let avoided=await read();assert.equal(avoided.S.hp,30);assert.equal(avoided.S.y,7);assert.equal(avoided.monsters[0].intent,undefined);assert.equal(avoided.monsters[0].creatureCD,3);
+    // GAME-006C: phase-three boss announces, persists, and grants an escape.
+    const fixture9=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=5;d.S.y=6;d.S.hp=30;d.S.maxHp=50;d.S.floor=6;d.features=[];d.terrain=[];d.loot=[];for(let y=4;y<=10;y++)for(let x=4;x<=10;x++)d.map[y*48+x]=0;d.stairs={x:15,y:15};d.monsters=[{x:8,y:6,hp:10,maxHp:30,atk:4,role:'guardian',kind:'Morvath',color:'#d6c5a0',boss:'ossuary',ability:'Mur d’ossements',elite:true,phase:1,specialCD:0}];return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-9')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-9','1')}},{key,data:fixture9});
+    await page.reload();await page.locator('#resume').tap();
+    await page.locator('[data-d="1,0"]').tap();
+    let bossWarned=await read();assert.equal(bossWarned.S.hp,30);assert.equal(bossWarned.monsters[0].phase,3);assert.ok(bossWarned.monsters[0].intent.cells.some(c=>c.x===6&&c.y===6));
+    await page.reload();await page.locator('#resume').tap();
+    assert.equal((await read()).monsters[0].phase,3);
+    await page.locator('[data-d="-1,0"]').tap();
+    let bossAvoided=await read();assert.equal(bossAvoided.S.hp,30);assert.equal(bossAvoided.S.x,5);assert.equal(bossAvoided.monsters[0].intent,undefined);assert.equal(bossAvoided.monsters[0].specialCD,2);
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
     await page.locator('#zoom').selectOption('150');assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).zoom,pref),150);
     await page.locator('#optback').tap();await page.locator('#back').tap();
