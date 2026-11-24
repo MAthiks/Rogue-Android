@@ -411,6 +411,25 @@ const RARE_ENCOUNTERS=[
  {id:'warden',name:'Le Gardien des cendres',affix:'armored',color:'#b98f77',min:10,role:'guardian'},
  {id:'needle',name:'L’Aiguille noire',affix:'furious',color:'#939eab',min:12,role:'archer'}
 ];
+// GAME-010D: optional second sealed chamber, without changing original layout or RNG.
+function addDeepSecret(d,decorated,W,H,floor){
+ if(floor<8||!decorated.features.some(f=>f.type==='secret'))return false;
+ const rnd=explorationRng((d.seed^0x6c8e9cf5^Math.imul(floor,0x85ebca6b))>>>0);
+ if(rnd(100)>=45)return false;
+ const map=decorated.map,k=(x,y)=>y*W+x,used=new Set([d.start,d.stairs,...d.monsters,...d.loot,...decorated.features].map(p=>k(p.x,p.y)));
+ const candidates=[];
+ for(let y=2;y<H-4;y++)for(let x=2;x<W-4;x++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const ex=x+1-dx*2,ey=y+1-dy*2,ax=ex-dx,ay=ey-dy;
+  if(ax<1||ay<1||ax>=W-1||ay>=H-1||d.map[k(ax,ay)]!==0||map[k(ax,ay)]!==0||used.has(k(ax,ay))||Math.max(Math.abs(ex-d.start.x),Math.abs(ey-d.start.y))<=7)continue;
+  let valid=true;for(let yy=y-1;yy<=y+3;yy++)for(let xx=x-1;xx<=x+3;xx++)if(map[k(xx,yy)]!==1||used.has(k(xx,yy)))valid=false;
+  if(valid)candidates.push({x,y,ex,ey});
+ }
+ if(!candidates.length)return false;
+ const p=candidates[rnd(candidates.length)];
+ for(let y=p.y;y<p.y+3;y++)for(let x=p.x;x<p.x+3;x++)map[k(x,y)]=0;
+ decorated.features.push({x:p.ex,y:p.ey,type:'secret',open:false,found:false},{x:p.x+1,y:p.y+1,type:'chest',open:false,found:true,reward:'gear',secret:true});
+ return true;
+}
 function explorationRng(seed){let s=(seed^0x75e12c4b)>>>0;s=Math.imul(s^(s>>>16),0x7feb352d);s=Math.imul(s^(s>>>15),0x846ca68b);s=(s^(s>>>16))>>>0;return n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)}}
 function buildExploration(d,decorated,terrain,existing,monsters,floor){
  const rnd=explorationRng(d.seed),used=new Set([d.start,d.stairs,...monsters,...existing,...decorated.features,...terrain].map(p=>p.x+','+p.y));
@@ -1129,25 +1148,6 @@ function decorateDungeon(d,W,H,floor){
   }
   for(const f of features)if(f.type==='door')map[key(f.x,f.y)]=1;
   return {map,features};
-}
-// GAME-010D: optional second sealed chamber, without changing original layout or RNG.
-function addDeepSecret(d,decorated,W,H,floor){
- if(floor<8||!decorated.features.some(f=>f.type==='secret'))return false;
- const rnd=explorationRng((d.seed^0x6c8e9cf5^Math.imul(floor,0x85ebca6b))>>>0);
- if(rnd(100)>=45)return false;
- const map=decorated.map,k=(x,y)=>y*W+x,used=new Set([d.start,d.stairs,...d.monsters,...d.loot,...decorated.features].map(p=>k(p.x,p.y)));
- const candidates=[];
- for(let y=2;y<H-4;y++)for(let x=2;x<W-4;x++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-  const ex=x+1-dx*2,ey=y+1-dy*2,ax=ex-dx,ay=ey-dy;
-  if(ax<1||ay<1||ax>=W-1||ay>=H-1||d.map[k(ax,ay)]!==0||map[k(ax,ay)]!==0||used.has(k(ax,ay))||Math.max(Math.abs(ex-d.start.x),Math.abs(ey-d.start.y))<=7)continue;
-  let valid=true;for(let yy=y-1;yy<=y+3;yy++)for(let xx=x-1;xx<=x+3;xx++)if(map[k(xx,yy)]!==1||used.has(k(xx,yy)))valid=false;
-  if(valid)candidates.push({x,y,ex,ey});
- }
- if(!candidates.length)return false;
- const p=candidates[rnd(candidates.length)];
- for(let y=p.y;y<p.y+3;y++)for(let x=p.x;x<p.x+3;x++)map[k(x,y)]=0;
- decorated.features.push({x:p.ex,y:p.ey,type:'secret',open:false,found:false},{x:p.x+1,y:p.y+1,type:'chest',open:false,found:true,reward:'gear',secret:true});
- return true;
 }
 function featureAt(x,y){return features.find(f=>f.x===x&&f.y===y)}
 function searchNearby(){
