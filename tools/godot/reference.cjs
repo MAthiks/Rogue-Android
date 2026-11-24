@@ -29,14 +29,16 @@ function createSession(html,seed){
   // Les boutons générés par inventory() sont réellement câblés par le moteur.
   const controls=new Map();
   function section(id){
-    const el={id,innerHTML:'',before(){},after(){},querySelector(){return section('placeholder')},
+    let markup='';const children=[];
+    const el={id,get innerHTML(){return markup},set innerHTML(value){markup=value;children.length=0},before(child){children.push(child)},after(child){children.push(child)},querySelector(){return {before(child){children.push(child)},after(child){children.push(child)}}},
       querySelectorAll(selector){
         const m=/^\[data-([a-z-]+)\]$/.exec(selector);if(!m)return [];
         const attr=m[1],re=new RegExp('data-'+attr+'="([^"]*)"','g');
-        return [...el.innerHTML.matchAll(re)].map(match=>{
+        const own=[...el.innerHTML.matchAll(re)].map(match=>{
           const node={dataset:{[attr]:match[1]},value:'',onclick:null,onchange:null};
           controls.set(attr+':'+match[1],node);return node;
         });
+        return [...own,...children.flatMap(child=>child.querySelectorAll(selector))];
       }};
     return el;
   }
