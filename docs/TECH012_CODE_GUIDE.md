@@ -99,3 +99,40 @@ Le rendu ne doit pas modifier les règles du jeu. Il traduit l'état du moteur e
 Conserver les dimensions logiques de la grille, les règles de diagonale et de visibilité, l'ordre de résolution des tours et les paramètres de génération. Les couches graphiques, le zoom et les optimisations de rendu ne doivent pas modifier ces règles. Les formats de sauvegarde et leur éventuelle migration doivent faire l'objet d'un chantier indépendant.
 
 Le portage pourra remplacer le Canvas et le DOM par des nœuds Godot adaptés, mais aucune équivalence de comportement n'est considérée comme acquise sans tests.
+
+## Sauvegardes, historique et sécurité
+
+Le moteur conserve trois ensembles de données distincts dans localStorage : la partie active (KEY), l'historique (HISTORY_KEY) et les préférences d'affichage (PREF). Il faut conserver les clés historiques pour permettre la reprise des parties existantes.
+
+- save() enregistre une partie active ; restore() charge les données et appelle migrate() pour compléter les champs anciens.
+- endRun() termine définitivement une partie dans le fonctionnement normal du jeu et retire la sauvegarde active ; recordRun() ajoute le résultat à l'historique.
+- recoveryMenu() permet de copier une sauvegarde illisible sans la supprimer automatiquement.
+- exportTransfer() assemble les trois ensembles dans un paquet JSON versionné.
+- parseTransfer() limite la taille du texte, vérifie l'arbre des données et les contraintes métier avant import.
+- transferTree() impose des bornes sur la profondeur, le nombre de valeurs, les chaînes et les propriétés ; certains noms de propriétés sont interdits.
+- importTransfer() tente de restaurer les anciennes valeurs si une écriture échoue. Ce mécanisme n'est pas une transaction atomique garantie par le navigateur.
+
+Ces contrôles ne constituent ni une signature cryptographique, ni une protection absolue contre la modification manuelle des sauvegardes. Le stockage est local à l'origine web ou à l'application ; le transfert manuel peut restaurer un état antérieur. Ne pas publier de sauvegarde personnelle. Un audit de sécurité et des tests de données malformées restent distincts du chantier de documentation.
+
+## Interfaces et actions
+
+Les fonctions classCard(), characterDossier(), equipmentRack() et bagCards() génèrent des fragments HTML. inventory() assemble les sections et attache les actions de progression, de spécialisation et d'équipement. Les fonctions de présentation ne doivent pas attribuer de bonus ni consommer de tour. Les actions doivent conserver leurs vérifications de disponibilité, de capacité et de prérequis.
+
+Le pavé directionnel appelle move() ; les boutons de compétences appellent activate(). Le menu de pause ne doit pas faire avancer la simulation. La sauvegarde lors du changement de visibilité de la page ne doit pas réécrire une partie déjà terminée.
+
+## Architecture modulaire envisagée (non implémentée)
+
+| Module logique proposé | Responsabilité | Dépendances à isoler |
+| --- | --- | --- |
+| state | État et invariants de la partie | Schéma des données |
+| dungeon | Génération et décoration des étages | Graine, dimensions et catalogues |
+| geometry | Coordonnées, déplacements et visibilité | Grille et mémoire |
+| combat | Dégâts, états, compétences, résolution des tours | État, équipement, talents |
+| ai | Perception, pathfinding, intentions ennemies | Géométrie et acteurs |
+| progression | Niveaux, talents, spécialisations | État du personnage |
+| items | Équipement, consommables, économie | Catalogues et état |
+| persistence | Sauvegarde, migration, historique, transfert | Stockage et schéma |
+| presentation | Sprites, caméra, HUD et menus | Lecture de l'état, commandes explicites |
+| platform | Intégration PWA et Android | API de la plateforme |
+
+Ce tableau est une proposition de séparation des responsabilités, pas la description de fichiers existants. Avant toute extraction, identifier les accès à l'état partagé, conserver la séquence d'initialisation et exécuter les tests historiques. Les tests actuels extraient parfois le JavaScript depuis index.html ; une modularisation doit adapter leur méthode de chargement sans réduire les assertions. La migration vers Godot devra rester indépendante d'un simple changement de présentation.
