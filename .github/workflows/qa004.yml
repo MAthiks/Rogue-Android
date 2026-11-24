@@ -19,7 +19,7 @@ jobs:
       - name: Run all engine suites
         run: |
           git show 087621fea8d6bba80aa5e1efc4c589fda09ec418:index.html > /tmp/rogue-003b.html
-          for test in tests/game004*.cjs tests/qa004.cjs tests/game005a.cjs tests/game005b.cjs tests/game005c.cjs tests/game005d.cjs tests/game005e.cjs tests/game005f.cjs tests/game006a.cjs tests/game006b.cjs tests/game006c.cjs tests/game006d.cjs tests/game006e.cjs tests/game006f.cjs tests/game007a.cjs tests/game007b.cjs; do
+          for test in tests/game004*.cjs tests/qa004.cjs tests/game005a.cjs tests/game005b.cjs tests/game005c.cjs tests/game005d.cjs tests/game005e.cjs tests/game005f.cjs tests/game006a.cjs tests/game006b.cjs tests/game006c.cjs tests/game006d.cjs tests/game006e.cjs tests/game006f.cjs tests/game007a.cjs tests/game007b.cjs tests/game007c.cjs; do
             echo "Running $test"
             node "$test" /tmp/rogue-003b.html || exit 1
           done
@@ -37,7 +37,7 @@ jobs:
           ROGUE_ART_PREVIEW: '1'
       - uses: actions/upload-artifact@v4
         with:
-          name: rogue-player-art-preview
+          name: rogue-enemy-art-preview
           path: art-preview/
           if-no-files-found: error
           retention-days: 30
