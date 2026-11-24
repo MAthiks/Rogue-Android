@@ -27,6 +27,18 @@ jobs:
           node tests/tech013a.cjs
           node tests/tech013b.cjs
           node tests/tech013systems.cjs
+      - name: Verify Godot reference parity and reproducible campaigns
+        run: |
+          mkdir -p godot-reference
+          node tests/tech014.cjs godot-reference/reference.json
+          node tools/godot/reference.cjs catalog index.html godot-reference/catalog.json
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: cryptgrave-godot-reference
+          path: godot-reference/
+          if-no-files-found: error
+          retention-days: 30
       - name: Verify release metadata and publication guard
         run: node tests/game011d-release.cjs
       - name: Run all engine suites
