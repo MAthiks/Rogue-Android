@@ -1,6 +1,6 @@
 # GAME-008C — PWA Android et hébergement
 
-Le moteur JavaScript est identique à GAME-008B (main 5e314b97cc664c53cc98c8fdf67174a03604db6a). Seuls les liens de manifeste et l'enregistrement optionnel du service worker s'ajoutent au HTML.
+Hors libellé du menu principal (CRYPTGRAVE), le moteur JavaScript est identique à GAME-008B (main 5e314b97cc664c53cc98c8fdf67174a03604db6a). Outre le changement de nom, seuls les liens de manifeste et l'enregistrement optionnel du service worker s'ajoutent au HTML.
 
 ## Construction
 Node 22 : node tools/build-pwa.cjs pwa-dist
@@ -20,8 +20,8 @@ Si un site existant utilise une autre origine, localStorage n'est pas transfér�
 1. Ouvrir l'URL HTTPS. Attendre la première installation du service worker.
 2. Chrome > menu > Installer l'application / Ajouter à l'écran d'accueil (libellé selon navigateur).
 3. Créer une partie de test ou reprendre la sauvegarde existante sur cette même origine.
-4. Passer en mode avion, fermer puis ouvrir ROGUE et reprendre. Vérifier déplacement, tour, fermeture et sauvegarde.
-5. Rétablir le réseau. Lors d'une mise à jour, fermer toutes les fenêtres ROGUE puis rouvrir. Le worker ne force pas de rechargement pendant une partie.
+4. Passer en mode avion, fermer puis ouvrir CRYPTGRAVE et reprendre. Vérifier déplacement, tour, fermeture et sauvegarde.
+5. Rétablir le réseau. Lors d'une mise à jour, fermer toutes les fenêtres CRYPTGRAVE puis rouvrir. Le worker ne force pas de rechargement pendant une partie.
 6. Contrôler les préférences, le Panthéon, les huit directions, l'absence de régression et l'absence d'effet sur ROGOV.
 
-Le cache est isolé par chemin de scope. La mise à jour ne supprime que les caches de ROGUE, jamais localStorage. Une première visite nécessite Internet ; stockage effacé par l'utilisateur/navigateur ou éviction peut supprimer le hors-ligne et les données. Une PWA n'est pas une APK.
+Le cache est isolé par chemin de scope. La mise à jour ne supprime que les caches de CRYPTGRAVE, jamais localStorage. Une première visite nécessite Internet ; stockage effacé par l'utilisateur/navigateur ou éviction peut supprimer le hors-ligne et les données. Une PWA n'est pas une APK.
