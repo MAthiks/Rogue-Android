@@ -1453,6 +1453,89 @@ function enemyAttack(m,ranged,power=0,drain=false){
   if(S.shield>0){let absorbed=Math.min(dmg,S.shield);S.shield-=absorbed;dmg-=absorbed}
   const actual=Math.min(S.hp,dmg);S.hp=Math.max(0,S.hp-dmg);combatFx(actual>0?'hurt':'guard',actual>0?actual:undefined);if(m.affix==='vampiric'&&actual>0)m.hp=Math.min(m.maxHp,m.hp+Math.min(2,actual));say(m.kind+(ranged?(m.species?' lance un projectile : -':' te décoche une flèche : -'):' te frappe : -')+dmg+' PV');if(drain&&actual>0){const n=Math.min(2,S.res);S.res-=n;say('Drain : -'+n+' ressources.')}if(S.hp===0)die();
 }
+// GAME-010C: coordination uses live positions and existing intent fields only.
+const AI_FAMILY={
+ wanderer:'pressure',brute:'pressure',archer:'ranged',ambusher:'flank',coward:'retreat',tracker:'flank',guardian:'escort',
+ boneguard:'escort',wraith:'flank',cavefang:'flank',spitter:'ranged',sentinel:'escort',runecaster:'ranged',
+ slag:'pressure',cinder:'flank',templar:'escort',oracle:'ranged',mycelium:'pressure',sporeling:'retreat',
+ frostfang:'flank',icecaller:'ranged',voidstalker:'flank',riftspawn:'pressure'
+};
+const BOSS_PHASE_PATTERN={
+ stone:[[2,0],[-2,0],[0,2],[0,-2]],ash:[[1,1],[-1,-1]],veil:[[1,0],[-1,0],[0,1],[0,-1]],
+ ossuary:[[1,-1],[-1,1]],mire:[[0,1],[0,-1]],runes:[[2,0],[-2,0]],
+ frost:[[1,1],[-1,-1],[1,-1],[-1,1]],abyssal:[[2,2],[-2,-2],[1,-1],[-1,1]]
+};
+function aiFamily(m){return Object.hasOwn(AI_FAMILY,m.species)?AI_FAMILY[m.species]:Object.hasOwn(AI_FAMILY,m.role)?AI_FAMILY[m.role]:'pressure'}
+function aiLine(a,b,board,all=[],ignore=null){
+ const n=dist(a,b);let prev=a;
+ for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};
+  if(!board.stepOK(p.x,p.y,prev.x,prev.y)||(i<n&&all.some(z=>z!==ignore&&z.hp>0&&z.x===p.x&&z.y===p.y)))return false;prev=p}
+ return true;
+}
+function aiNeighbors(p,board){
+ const out=[];for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&board.stepOK(p.x+dx,p.y+dy,p.x,p.y))out.push({x:p.x+dx,y:p.y+dy});return out;
+}
+function aiSame(a,b){return a.x===b.x&&a.y===b.y}
+function aiThreatCells(all,skip=null){
+ return all.filter(m=>m!==skip&&m.hp>0&&!m.stun).flatMap(m=>m.intent?.cells|| (m.aim?[m.aim]:[]));
+}
+function aiEscapeCells(player,all,board,extra=[],moving=null,dest=null){
+ const threats=[...aiThreatCells(all),...extra];
+ return aiNeighbors(player,board).filter(p=>!all.some(m=>m.hp>0&&aiSame(m===moving?dest:m,p))&&!threats.some(t=>aiSame(t,p)));
+}
+function prepareCoordinatedIntent(m,player,all,board){
+ if(!m.intent)return true;
+ const intent=m.intent,prior=intent.cells.slice(),others=aiThreatCells(all,m);
+ const escape=aiNeighbors(player,board).filter(p=>!all.some(z=>z.hp>0&&aiSame(z,p))&&!others.some(t=>aiSame(t,p)));
+ if(!escape.length){delete m.intent;return false}
+ const cells=prior.slice();
+ // A late-phase boss gains a distinctive extension, but never seals every escape.
+ if(m.boss&&(m.phase||1)>=2)for(const [dx,dy] of BOSS_PHASE_PATTERN[m.boss]||[]){
+  const p={x:player.x+dx,y:player.y+dy};
+  if(!aiSame(m,p)&&!cells.some(c=>aiSame(c,p))&&aiLine(player,p,board)&&aiLine(m,p,board))cells.push(p);
+ }
+ if(!escape.some(p=>!cells.some(c=>aiSame(c,p)))){
+  const safe=escape[0];for(let i=cells.length-1;i>=0;i--)if(aiSame(cells[i],safe))cells.splice(i,1);
+ }
+ intent.cells=cells;return true;
+}
+function coordinatedAction(m,player,all,board,contacts,base){
+ if(m.stun||base.type!=='move')return base;
+ const d=dist(m,player),family=aiFamily(m),visible=d<=8&&aiLine(m,player,board);
+ const threats=aiThreatCells(all),safeBefore=threats.length?aiEscapeCells(player,all,board):[];
+ const legal=p=>!safeBefore.length||aiEscapeCells(player,all,board,[],m,p).length>0;
+ // Never pursue a hidden player via the formation layer; only veto a move that seals the last exit.
+ if(!visible)return legal(base)?base:{type:'wait'};
+ const allies=all.filter(a=>a!==m&&a.hp>0&&!a.stun&&dist(m,a)<=4&&aiLine(m,a,board));
+ const occupied=p=>all.some(a=>a!==m&&a.hp>0&&aiSame(a,p))||aiSame(p,player);
+ const opts=aiNeighbors(m,board).filter(p=>!occupied(p));
+ const candidates=opts.filter(legal);
+ if(!legal(base))return candidates.length?{type:'move',...candidates.sort((a,b)=>dist(a,player)-dist(b,player))[0]}:{type:'wait'};
+ if(m.boss||!allies.length)return base;
+ if(family==='ranged'&&d>=2&&d<=6&&!aiLine(m,player,board,all,m)){
+  const lane=candidates.filter(p=>dist(p,player)>=2&&dist(p,player)<=5&&aiLine(p,player,board,all,m)).sort((a,b)=>Math.abs(dist(a,player)-4)-Math.abs(dist(b,player)-4));
+  if(lane.length)return {type:'move',...lane[0]};
+ }
+ if(family==='flank'){
+  const front=allies.find(a=>dist(a,player)===1);
+  if(front){
+   const flank=candidates.filter(p=>dist(p,player)<=dist(base,player)&&dist(p,front)>dist(base,front)).sort((a,b)=>dist(b,front)-dist(a,front)||dist(a,player)-dist(b,player));
+   if(flank.length)return {type:'move',...flank[0]};
+  }
+ }
+ if(family==='escort'&&d>2){
+  const leader=allies.find(a=>a.boss||aiFamily(a)==='ranged');
+  if(leader&&dist(m,leader)<=2){
+   const lanes=candidates.filter(p=>dist(p,leader)<=2&&dist(p,player)<=dist(base,player)&&aiLine(leader,player,board,[{...p,hp:1}]));
+   if(lanes.length&&!aiLine(leader,player,board,[{x:base.x,y:base.y,hp:1}]))return {type:'move',...lanes[0]};
+  }
+ }
+ if(family==='retreat'&&m.hp*3<=m.maxHp){
+  const cover=candidates.filter(p=>dist(p,player)>=d&&!aiLine(p,player,board)).sort((a,b)=>dist(b,player)-dist(a,player));
+  if(cover.length)return {type:'move',...cover[0]};
+ }
+ return base;
+}
 function enemyPhase(){
   const contacts=monsters.filter(m=>{
     if(m.hp<=0||m.stun>0||dist(m,S)>8)return false;
@@ -1465,12 +1548,12 @@ function enemyPhase(){
     if(m.bleed>0){m.bleed--;m.hp-=2;say(m.kind+' saigne : -2 PV');if(m.hp<=0){kill(m);continue}}
     if(m.exposed>0)m.exposed--;
     if(m.stun>0){m.stun--;delete m.aim;delete m.intent;continue}
-    const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
-    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.');continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
     const enemyStep=(x,y,fx,fy)=>stepOK(x,y,fx,fy)&&featureAt(x,y)?.type!=='merchant'&&(!(x===stairs.x&&y===stairs.y)||(x===S.x&&y===S.y));
+    const special=Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossAction(m,S,{W,H,stepOK},monsters):bossAction(m,S,{W,H,stepOK});
+    if(special){if(special.changed)say(m.kind+' entre en phase '+m.phase+' !');if(special.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+m.ability+' ! Évite les cases rouges.')}else{m.specialCD=1;say(m.kind+' retient son attaque.')}continue}if(special.type==='release'){if(special.hit)enemyAttack(m,false,special.power,special.drain);else say(m.ability+' manque sa cible.');continue}}
     const creature=creatureAction(m,S,monsters,{W,H,stepOK:enemyStep});
-    if(creature){delete m.aim;if(creature.type==='announce'){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.');continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
-    const action=tacticalTurn(m,S,monsters,{W,H,stepOK:enemyStep},contacts);
+    if(creature){delete m.aim;if(creature.type==='announce'){if(prepareCoordinatedIntent(m,S,monsters,{W,H,stepOK:enemyStep})){say(m.kind+' prépare '+creature.name+' ! Évite les cases rouges.')}else m.creatureCD=1;continue}if(creature.hit)enemyAttack(m,creature.ranged,creature.power,creature.drain);else say(creature.name+' manque sa cible.');continue}
+    const board={W,H,stepOK:enemyStep};const baseAction=tacticalTurn(m,S,monsters,board,contacts);const action=coordinatedAction(m,S,monsters,board,contacts,baseAction);
     if(action.type==='attack')enemyAttack(m,action.ranged);
     else if(action.type==='move'){m.x=action.x;m.y=action.y}
     else if(action.type==='aim'&&los(m.x,m.y))say(m.kind+' te vise ! Déplace-toi.');

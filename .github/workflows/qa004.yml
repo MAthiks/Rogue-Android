@@ -49,6 +49,8 @@ jobs:
         run: node tests/game010a.cjs
       - name: Verify talent synergies
         run: node tests/game010b.cjs
+      - name: Verify tactical coordination and boss patterns
+        run: node tests/game010c.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
