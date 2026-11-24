@@ -33,3 +33,23 @@ jobs:
       - run: npm install --no-save --no-package-lock playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: node tests/qa004-browser.cjs
+
+  rc1-package:
+    if: github.head_ref == 'release/game-006-rc1' || github.ref == 'refs/heads/release/game-006-rc1'
+    needs: [engine, chromium-mobile]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare standalone browser candidate
+        run: |
+          mkdir -p candidate
+          cp index.html candidate/index.html
+          cp docs/GAME006_RC1_RECIPE.md candidate/RECETTE.md
+          git rev-parse HEAD > candidate/BUILD_SHA.txt
+          sha256sum candidate/index.html > candidate/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rogue-game-006-rc1
+          path: candidate/
+          retention-days: 30
+          if-no-files-found: error
