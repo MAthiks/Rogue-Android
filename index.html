@@ -196,7 +196,15 @@ function say(t){messages.unshift(t);messages=messages.slice(0,3);log.textContent
 function show(html){panel.innerHTML=html;overlay.classList.remove('hidden')}
 function hide(){overlay.classList.add('hidden')}
 // TECH-012A — Enregistre la partie active et les données du donjon dans le stockage local. Une partie morte ou terminée ne doit pas redevenir une sauvegarde reprenable.
-function save(){if(S&&!S.dead&&!S.ended){try{localStorage.setItem(KEY,JSON.stringify({S,map,seen,monsters,loot,stairs,features,terrain}))}catch(e){say('Sauvegarde indisponible.')}}}
+function save(){
+  if(S&&!S.dead&&!S.ended){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({S,map,seen,monsters,loot,stairs,features,terrain}))
+    }catch(e){
+      say('Sauvegarde indisponible.')
+    }
+  }
+}
 // TECH-012A — Vérifie les données persistées avant de restaurer le donjon et le personnage. Retourne false si la sauvegarde est absente ou invalide, puis applique la migration si elle est valide.
 function restore(){clearCombatFx();S=null;selected=null;try{let d=JSON.parse(localStorage.getItem(KEY));if(!d||!Object.hasOwn(CLASSES,d.S?.classId)||d.S.dead||d.S.ended||d.map.length!==W*H||d.seen.length!==W*H||!Array.isArray(d.monsters)||!Array.isArray(d.loot)||!d.stairs)return false;({S,map,seen,monsters,loot,stairs}=d);features=Array.isArray(d.features)?d.features:[];terrain=Array.isArray(d.terrain)?d.terrain:[];migrate();return true}catch(e){S=null;selected=null;return false}}
 const ATTR=['Force','Dextérité','Constitution','Volonté','Intelligence','Perception'];
@@ -1473,7 +1481,11 @@ function reveal(){
  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(los(x,y))seen[idx(x,y)]=1;
 }
 // TECH-012A — Vérifie que la destination est praticable. En diagonale, les deux cases orthogonales doivent aussi être libres pour interdire le passage à travers un angle fermé.
-function stepOK(x,y,fx,fy){if(!clear(x,y))return false;let dx=x-fx,dy=y-fy;return !(dx&&dy&&(!clear(fx+dx,fy)||!clear(fx,fy+dy)))}
+function stepOK(x,y,fx,fy){
+  if(!clear(x,y))return false;
+  let dx=x-fx,dy=y-fy;
+  return !(dx&&dy&&(!clear(fx+dx,fy)||!clear(fx,fy+dy)))
+}
 function mob(x,y){return monsters.find(m=>m.hp>0&&m.x===x&&m.y===y)}
 function enemyXP(m,floor){
   const depth=Math.max(1,Math.min(30,floor));
@@ -1502,7 +1514,27 @@ function addSupplies(d,decorated,terrain){
 function healingLeft(){return Math.max(0,3-(S.healUses||0))}
 function bandageValue(level){return 9+Math.floor(Math.max(0,Math.min(30,level)-1)/5)}
 // TECH-012A — Convertit l'expérience en niveaux et attribue les gains correspondants. Plusieurs niveaux peuvent être obtenus en une seule récompense, sans dépasser le niveau 30.
-function gainXP(n){if(S.level>=30){S.xp=0;return}S.xp+=n;let threshold=8+S.level*6;while(S.level<30&&S.xp>=threshold){S.xp-=threshold;S.level++;threshold=8+S.level*6;S.points++;S.ap+=2;S.maxHp+=4;S.hp=Math.min(S.maxHp,S.hp+8);S.maxRes+=1;S.res=S.maxRes;say('Niveau '+S.level+' ! +4 PV max, +1 ressource,  +2 caractéristiques, +1 talent.')}if(S.level>=30)S.xp=0}
+function gainXP(n){
+  if(S.level>=30){
+    S.xp=0;
+    return
+  }
+  S.xp+=n;
+  let threshold=8+S.level*6;
+  while(S.level<30&&S.xp>=threshold){
+    S.xp-=threshold;
+    S.level++;
+    threshold=8+S.level*6;
+    S.points++;
+    S.ap+=2;
+    S.maxHp+=4;
+    S.hp=Math.min(S.maxHp,S.hp+8);
+    S.maxRes+=1;
+    S.res=S.maxRes;
+    say('Niveau '+S.level+' ! +4 PV max, +1 ressource,  +2 caractéristiques, +1 talent.')
+  }
+  if(S.level>=30)S.xp=0
+}
 function promoteEnemies(monsters,floor,seed,stairs){
   // Independent deterministic stream; no changes to layouts or original spawns.
   let n=(seed^0x9e3779b9)>>>0;const rnd=k=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return Math.floor(n/4294967296*k)};
@@ -1714,7 +1746,19 @@ function enemyPhase(){
   }
 }
 // TECH-012A — Clôt un tour consommé : avance le compteur, joue la phase ennemie puis actualise les états, la ressource, la visibilité, l'affichage et la sauvegarde si le joueur survit.
-function finish(rangedWeapon=false,offensiveSkill=false){S.turn++;enemyPhase();if(S.dead)return;S.veil=Math.max(0,S.veil-1);S.cool=S.cool.map(x=>Math.max(0,x-1));S.guard=Math.max(0,S.guard-1);S.boost=Math.max(0,S.boost-1);S.res=Math.min(S.maxRes,S.res+resourceRegen(rangedWeapon,offensiveSkill));reveal();update();save()}
+function finish(rangedWeapon=false,offensiveSkill=false){
+  S.turn++;
+  enemyPhase();
+  if(S.dead)return;
+  S.veil=Math.max(0,S.veil-1);
+  S.cool=S.cool.map(x=>Math.max(0,x-1));
+  S.guard=Math.max(0,S.guard-1);
+  S.boost=Math.max(0,S.boost-1);
+  S.res=Math.min(S.maxRes,S.res+resourceRegen(rangedWeapon,offensiveSkill));
+  reveal();
+  update();
+  save()
+}
 // TECH-012A — Délègue la mort permanente à la procédure commune de fin de partie.
 function die(){endRun('death')}
 // TECH-012A — Ramasse les objets présents sur la case. Les objets qui ne tiennent pas dans le sac ou la sacoche restent au sol.
