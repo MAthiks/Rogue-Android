@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+android {
+    namespace 'com.mathiks.cryptgrave'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.mathiks.cryptgrave'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '0.9.0'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    buildTypes {
+        debug { }
+        release { minifyEnabled false }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets {
+        main.assets.srcDir(layout.buildDirectory.dir('generated/gameAssets'))
+    }
+}
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
+def source = rootProject.file('../index.html')
+def icon = rootProject.file('../icon.svg')
+def assets = layout.buildDirectory.dir('generated/gameAssets')
+tasks.register('generateGameAssets') {
+    inputs.files(source, icon)
+    outputs.dir(assets)
+    doLast {
+        def out = assets.get().asFile
+        out.mkdirs()
+        def html = source.getText('UTF-8')
+        def marker = '<script>\n// GAME-008C: optional PWA shell;'
+        def start = html.indexOf(marker)
+        if (start < 0) throw new GradleException('PWA shell marker missing')
+        def end = html.indexOf('</script>', start)
+        if (end < 0) throw new GradleException('PWA shell ending missing')
+        html = html.substring(0, start) + html.substring(end + '</script>'.length())
+        html = html.replace('<link rel="manifest" href="./manifest.webmanifest">', '')
+                   .replace('<link rel="apple-touch-icon" href="./icons/icon-192.png">', '')
+        new File(out,'index.html').setText(html,'UTF-8')
+        new File(out,'icon.svg').bytes = icon.bytes
+    }
+}
+tasks.named('preBuild').configure { dependsOn('generateGameAssets') }
