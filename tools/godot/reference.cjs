@@ -66,7 +66,7 @@ function createSession(html,seed){
     else if(type==='event'||type==='room'){
       const f=engine.state().features.find(v=>v.x===command.x&&v.y===command.y);
       const event=type==='event';
-      if(overlay.classList.contains('hidden')||!f||f.type!==(event?'event':'specialRoom')||!(event?engine.eventChoiceAllowed:engine.specialRoomAllowed)(f,command.choice))throw Error('Choix invalide');
+      if(element('overlay').classList.contains('hidden')||!f||f.type!==(event?'event':'specialRoom')||!(event?engine.eventChoiceAllowed:engine.specialRoomAllowed)(f,command.choice))throw Error('Choix invalide');
       (event?engine.resolveEvent:engine.resolveSpecialRoom)(f,command.choice);
     }else if(type==='reload'){
       engine.save();if(!engine.restore())throw Error('Restauration impossible');engine.resume();
@@ -131,7 +131,7 @@ function campaign(html,id,seed,budget=400){
     const target=visible[0];
     const heal=p.bar.findIndex(i=>catalogs.CLASSES[id].skills[i][3]==='heal'&&!p.cool[i]&&p.res>=catalogs.CLASSES[id].skills[i][1]);
     let cmd;
-    if(!d.selected&&p.hp*2<p.maxHp&&heal>=0&&(p.healUses??0)<3)cmd={type:'skill',slot:heal};
+    if(d.selected===null&&p.hp*2<p.maxHp&&heal>=0&&(p.healUses??0)<3)cmd={type:'skill',slot:heal};
     else if(d.selected===null&&p.hp*2<p.maxHp&&p.bandages>0)cmd={type:'bandage'};
     else{
       const aligned=target&&(target.x===p.x||target.y===p.y||Math.abs(target.x-p.x)===Math.abs(target.y-p.y));
