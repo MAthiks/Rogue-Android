@@ -32,6 +32,7 @@ jobs:
           mkdir -p godot-reference
           node tests/tech014.cjs godot-reference/reference.json
           node tests/tech014-contracts.cjs godot-reference/systems.json
+          node tests/tech014-domain.cjs godot-reference/domain.json
           node tools/godot/reference.cjs catalog index.html godot-reference/catalog.json
       - uses: actions/upload-artifact@v4
         if: success()
