@@ -505,6 +505,83 @@ function merchantMenu(f,tab='buy'){
  panel.querySelectorAll('[data-buy]').forEach(b=>b.onclick=()=>{buyMerchant(f,+b.dataset.buy);merchantMenu(f,'buy')});
  panel.querySelectorAll('[data-sell]').forEach(b=>b.onclick=()=>{sellMerchant(f,+b.dataset.sell);merchantMenu(f,'sell')});
 }
+// GAME-006E: special room sites and optional upgrades to existing hidden chambers.
+const SPECIAL_ROOMS={
+ sanctuary:{name:'Sanctuaire de repos',color:'#82c7a1',min:4,desc:'Un autel intact offre un bref répit.',choices:[['rest','Récupérer jusqu’à 14 PV et 6 ressources.'],['protect','Obtenir un bouclier de 12 points.']]},
+ library:{name:'Bibliothèque ancienne',color:'#aab4e7',min:4,desc:'Des manuscrits ont survécu à la ruine.',choices:[['study','Étudier : gagner de l’expérience.'],['scroll','Prendre un parchemin de détection et un de protection.']]},
+ vault:{name:'Salle du trésor',color:'#e5bc6a',min:5,desc:'Un coffre scellé renferme les richesses de cet étage.',choices:[['gold','Prendre de l’or.'],['gear','Prendre un équipement rare ou mieux.']]},
+ cursed:{name:'Chambre maudite',color:'#c485ae',min:7,desc:'Le sceau exige un prix en sang, mais il peut être dissipé.',choices:[['blood','Sacrifier 8 PV : obtenir un équipement épique ou mieux.'],['purify','Dépenser 4 ressources : obtenir un bouclier de 10 points.']]},
+ hidden:{name:'Reliquaire secret',color:'#8cc8d7',min:4,desc:'Une cache oubliée, dissimulée derrière un passage secret.',choices:[['relic','Prendre un équipement rare ou mieux.'],['supplies','Prendre 2 bandages et une potion de soin.']]}
+};
+function buildSpecialRooms(d,decorated,terrain,loot,all,floor,W,H){
+ if(floor<4||floor>30)return [];
+ let n=(d.seed^Math.imul(floor,0x9e3779b1)^0xb2c137ad)>>>0;n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);n=(n^(n>>>16))>>>0;
+ const rnd=k=>{n=(Math.imul(n,1664525)+1013904223)>>>0;return Math.floor(n/4294967296*k)};
+ const result=[],used=new Set([d.start,d.stairs,...all,...loot,...decorated.features,...terrain].map(p=>p.y*W+p.x));
+ const contains=(r,p)=>p.x>=r.x&&p.x<r.x+r.w&&p.y>=r.y&&p.y<r.y+r.h;
+ const candidates=[];
+ for(const r of d.rooms){
+   if(contains(r,d.start)||contains(r,d.stairs))continue;
+   const cells=[];
+   for(let y=r.y+1;y<r.y+r.h-1;y++)for(let x=r.x+1;x<r.x+r.w-1;x++){
+     if(x<2||y<2||x>=W-2||y>=H-2||used.has(y*W+x)||Math.max(Math.abs(x-d.start.x),Math.abs(y-d.start.y))<=6)continue;
+     let open=true;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if(decorated.map[(y+dy)*W+x+dx]!==0)open=false;
+     if(open)cells.push({x,y});
+   }
+   if(cells.length)candidates.push({r,cells});
+ }
+ const types=Object.keys(SPECIAL_ROOMS).filter(k=>k!=='hidden'&&floor>=SPECIAL_ROOMS[k].min);
+ if(candidates.length&&rnd(100)<80){
+   const {r,cells}=candidates[rnd(candidates.length)],p=cells[rnd(cells.length)];
+   result.push({...p,type:'specialRoom',roomId:types[rnd(types.length)],found:true,spent:false,room:{x:r.x,y:r.y,w:r.w,h:r.h}});
+ }
+ const secret=decorated.features.find(f=>f.type==='chest'&&f.secret&&!f.open);
+ if(secret&&rnd(100)<65)result.push({x:secret.x,y:secret.y,type:'specialRoom',roomId:'hidden',found:true,spent:false,secret:true,room:{x:secret.x-1,y:secret.y-1,w:3,h:3}});
+ return result;
+}
+function specialRoomAllowed(f,choice){
+ if(mode!=='game'||!S||S.dead||f?.type!=='specialRoom'||f.spent||!features.includes(f)||!Object.hasOwn(SPECIAL_ROOMS,f.roomId)||dist(f,S)!==1||!stepOK(f.x,f.y,S.x,S.y)||mob(f.x,f.y))return false;
+ if(!SPECIAL_ROOMS[f.roomId].choices.some(c=>c[0]===choice))return false;
+ if(choice==='rest')return S.hp<S.maxHp||S.res<S.maxRes;
+ if(choice==='protect')return S.shield<12;
+ if(choice==='study')return S.level<30;
+ if(choice==='scroll')return pouchCount('insight')<POUCH_CAP&&pouchCount('ward')<POUCH_CAP;
+ if(choice==='gold')return goldBalance()<GOLD_CAP;
+ if(choice==='gear'||choice==='relic')return S.bag.length<24;
+ if(choice==='blood')return S.hp>8&&S.bag.length<24;
+ if(choice==='purify')return S.res>=4&&S.shield<10;
+ if(choice==='supplies')return pouchCount('heal')<POUCH_CAP;
+ return false;
+}
+function resolveSpecialRoom(f,choice){
+ if(!specialRoomAllowed(f,choice))return false;
+ const floor=Math.max(1,Math.min(30,S.floor));
+ f.spent=true;f.choice=choice;selected=null;hide();
+ if(choice==='rest'){S.hp=Math.min(S.maxHp,S.hp+14);S.res=Math.min(S.maxRes,S.res+6)}
+ else if(choice==='protect')S.shield=12;
+ else if(choice==='study')gainXP(12+floor*2);
+ else if(choice==='scroll'){addConsumable('insight');addConsumable('ward')}
+ else if(choice==='gold')S.gold=Math.min(GOLD_CAP,goldBalance()+15+floor*2);
+ else if(choice==='gear'||choice==='relic')S.bag.push(createGear(++S.serial,floor,3));
+ else if(choice==='blood'){S.hp-=8;S.bag.push(createGear(++S.serial,floor,4))}
+ else if(choice==='purify'){S.res-=4;S.shield=10}
+ else if(choice==='supplies'){S.bandages+=2;addConsumable('heal')}
+ say(SPECIAL_ROOMS[f.roomId].name+' : choix résolu.');finish();return true;
+}
+function specialRoomMenu(f){
+ const r=SPECIAL_ROOMS[f.roomId];if(!r||f.spent)return;
+ selected=null;show('<h1>'+r.name+'</h1><p>'+r.desc+'</p><p>Une seule récompense. Le choix coûte un tour : les ennemis peuvent agir.</p>'+r.choices.map(([id,label])=>'<button class="wide" data-room-choice="'+id+'" '+(specialRoomAllowed(f,id)?'':'disabled')+'>'+label+'</button>').join('')+'<button class="wide" id="roomBack">Revenir plus tard</button>');
+ panel.querySelectorAll('[data-room-choice]').forEach(b=>b.onclick=()=>resolveSpecialRoom(f,b.dataset.roomChoice));document.getElementById('roomBack').onclick=hide;
+}
+function drawSpecialRoom(f,px,py,visible){
+ ctx.fillStyle=f.spent||!visible?'#666b70':SPECIAL_ROOMS[f.roomId]?.color||'#d2c5a1';
+ ctx.fillRect(px+3,py+10,10,3);ctx.fillRect(px+5,py+5,6,5);
+ if(f.roomId==='library'){ctx.fillRect(px+2,py+3,12,2);ctx.fillRect(px+2,py+3,2,7);ctx.fillRect(px+12,py+3,2,7)}
+ else if(f.roomId==='vault'||f.roomId==='hidden'){ctx.fillRect(px+3,py+5,10,4)}
+ else if(f.roomId==='cursed'){ctx.fillRect(px+2,py+3,2,5);ctx.fillRect(px+12,py+3,2,5)}
+ else{ctx.fillRect(px+7,py+2,2,5);ctx.fillRect(px+5,py+4,6,2)}
+ if(!f.spent&&visible){ctx.fillStyle='#f7e7bc';ctx.fillRect(px+7,py+7,2,2)}
+}
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
@@ -586,7 +663,7 @@ function buildDungeon(W,H,floor,seed){
   }
   return {map,start,stairs,monsters,loot,rooms,seed:seed>>>0,profile:p.id,shortcuts};
 }
-function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=selectBossVariant(balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor),S.floor,seed);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);const merchant=buildMerchant(d,decorated,terrain,loot,monsters,S.floor,W,H);if(merchant)features.push(merchant);S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
+function generate(){const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=selectBossVariant(balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor),S.floor,seed);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);const merchant=buildMerchant(d,decorated,terrain,loot,monsters,S.floor,W,H);if(merchant)features.push(merchant);for(const room of buildSpecialRooms(d,decorated,terrain,loot,monsters,S.floor,W,H)){if(room.secret){const i=features.findIndex(f=>f.type==='chest'&&f.secret&&f.x===room.x&&f.y===room.y);if(i>=0)features.splice(i,1,room)}else features.push(room)}S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
 function decorateDungeon(d,W,H,floor){
   let s=(d.seed^0x43ac91d7)>>>0;
   const rnd=n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)};
@@ -650,7 +727,7 @@ function drawFeature(f,px,py,visible){
     else{ctx.fillStyle=visible?'#a58150':'#554834';ctx.fillRect(px+2,py+1,12,14);ctx.fillStyle='#57432b';ctx.fillRect(px+5,py+1,1,14);ctx.fillRect(px+10,py+1,1,14);ctx.fillStyle='#ebcb81';ctx.fillRect(px+10,py+7,2,2)}
   }else if(f.type==='chest'){
     ctx.fillStyle=visible?'#a5743e':'#5c472e';ctx.fillRect(px+3,py+6,10,7);ctx.fillStyle=f.open?'#2a2522':'#edc879';ctx.fillRect(px+4,py+7,8,2);ctx.fillRect(px+7,py+9,2,2);
-  }else if(f.type==='merchant'){ctx.fillStyle=MERCHANTS[f.merchantId]?.color||'#bba67c';ctx.fillRect(px+5,py+2,6,4);ctx.fillRect(px+3,py+6,10,7);ctx.fillStyle='#efcf83';ctx.fillRect(px+7,py+8,3,3)}else if(f.type==='event'){ctx.fillStyle=f.spent?'#666b70':(EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9');ctx.fillRect(px+6,py+2,4,3);ctx.fillRect(px+4,py+5,8,7);ctx.fillRect(px+7,py+13,2,2);if(!f.spent){ctx.fillStyle='#f6e7c4';ctx.fillRect(px+7,py+6,2,4)}}else if(f.type==='trap'){ctx.fillStyle=f.spent?'#777d76':'#cf7965';ctx.fillRect(px+3,py+10,10,2);if(!f.spent){ctx.fillRect(px+4,py+5,2,5);ctx.fillRect(px+10,py+5,2,5)}}
+  }else if(f.type==='specialRoom'){drawSpecialRoom(f,px,py,visible)}else if(f.type==='merchant'){ctx.fillStyle=MERCHANTS[f.merchantId]?.color||'#bba67c';ctx.fillRect(px+5,py+2,6,4);ctx.fillRect(px+3,py+6,10,7);ctx.fillStyle='#efcf83';ctx.fillRect(px+7,py+8,3,3)}else if(f.type==='event'){ctx.fillStyle=f.spent?'#666b70':(EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9');ctx.fillRect(px+6,py+2,4,3);ctx.fillRect(px+4,py+5,8,7);ctx.fillRect(px+7,py+13,2,2);if(!f.spent){ctx.fillStyle='#f6e7c4';ctx.fillRect(px+7,py+6,2,4)}}else if(f.type==='trap'){ctx.fillStyle=f.spent?'#777d76':'#cf7965';ctx.fillRect(px+3,py+10,10,2);if(!f.spent){ctx.fillRect(px+4,py+5,2,5);ctx.fillRect(px+10,py+5,2,5)}}
 }
 function biomeForFloor(floor,seed){
   const original=['crypt','cave','ruins','volcanic','sanctum'][Math.min(4,Math.max(0,Math.floor((floor-1)/6)))];
@@ -907,7 +984,7 @@ function collectLoot(x,y){
   }
   if(full)say('Sac ou sacoche pleine : butin laissé au sol.');
 }
-function move(dx,dy){if(mode!=='game'||!overlay.classList.contains('hidden'))return;if(selected!==null){if(selected==='weapon')useWeaponDirection(dx,dy);else useDirection(dx,dy);return}let x=S.x+dx,y=S.y+dy;const f=featureAt(x,y);const legalAngle=!dx||!dy||clear(S.x+dx,S.y)&&clear(S.x,S.y+dy);if(legalAngle&&!mob(x,y)&&f?.type==='merchant'&&stepOK(x,y,S.x,S.y)){merchantMenu(f);return}if(legalAngle&&!mob(x,y)&&f?.type==='event'&&!f.spent&&stepOK(x,y,S.x,S.y)){explorationMenu(f);return}if(legalAngle&&!mob(x,y)&&interactFeature(f)){finish();return}if(!stepOK(x,y,S.x,S.y)){say('Passage ou angle bloqué.');return}let m=mob(x,y);if(m){hit(m,2+rand(3),basicProfile(m));finish();return}S.x=x;S.y=y;triggerTrap(x,y);if(S.dead)return;enterTerrain(x,y);if(S.dead)return;collectLoot(x,y);if(x===stairs.x&&y===stairs.y){if(monsters.some(m=>m.boss&&m.hp>0)){say('Le boss doit être vaincu avant de descendre.');finish();return}if(loot.some(l=>l.x===x&&l.y===y)){say('Butin sur les escaliers : libère de la place avant de descendre.');finish();return}S.floor++;const recovery=4+Math.floor(Math.min(30,S.floor-1)/6);const recovered=Math.min(recovery,S.maxHp-S.hp);S.hp+=recovered;S.res=S.maxRes;generate();say('Étage '+S.floor+' · '+currentBiome().name+' · +'+recovered+' PV.')}finish()}
+function move(dx,dy){if(mode!=='game'||!overlay.classList.contains('hidden'))return;if(selected!==null){if(selected==='weapon')useWeaponDirection(dx,dy);else useDirection(dx,dy);return}let x=S.x+dx,y=S.y+dy;const f=featureAt(x,y);const legalAngle=!dx||!dy||clear(S.x+dx,S.y)&&clear(S.x,S.y+dy);if(legalAngle&&!mob(x,y)&&f?.type==='merchant'&&stepOK(x,y,S.x,S.y)){merchantMenu(f);return}if(legalAngle&&!mob(x,y)&&f?.type==='specialRoom'&&!f.spent&&stepOK(x,y,S.x,S.y)){specialRoomMenu(f);return}if(legalAngle&&!mob(x,y)&&f?.type==='event'&&!f.spent&&stepOK(x,y,S.x,S.y)){explorationMenu(f);return}if(legalAngle&&!mob(x,y)&&interactFeature(f)){finish();return}if(!stepOK(x,y,S.x,S.y)){say('Passage ou angle bloqué.');return}let m=mob(x,y);if(m){hit(m,2+rand(3),basicProfile(m));finish();return}S.x=x;S.y=y;triggerTrap(x,y);if(S.dead)return;enterTerrain(x,y);if(S.dead)return;collectLoot(x,y);if(x===stairs.x&&y===stairs.y){if(monsters.some(m=>m.boss&&m.hp>0)){say('Le boss doit être vaincu avant de descendre.');finish();return}if(loot.some(l=>l.x===x&&l.y===y)){say('Butin sur les escaliers : libère de la place avant de descendre.');finish();return}S.floor++;const recovery=4+Math.floor(Math.min(30,S.floor-1)/6);const recovered=Math.min(recovery,S.maxHp-S.hp);S.hp+=recovered;S.res=S.maxRes;generate();say('Étage '+S.floor+' · '+currentBiome().name+' · +'+recovered+' PV.')}finish()}
 function activate(i){if(mode!=='game'||!overlay.classList.contains('hidden'))return;i=S.bar[i];if(!unlocked(i))return;let c=CLASSES[S.classId],sk=c.skills[i],cost=sk[1];if(S.cool[i]||S.res<cost){say('Compétence indisponible.');return}if(sk[3]==='direction'||sk[3]==='ranged'){selected=selected===i?null:i;say(selected===null?'Ciblage annulé.':'Choisis une direction sur le pavé.');update();return}if(sk[3]==='heal'&&!healingLeft()){say('Soins de compétence épuisés pour cet étage.');return}if(sk[3]==='heal'&&S.hp===S.maxHp){say('PV déjà au maximum.');return}selected=null;S.res-=cost;S.cool[i]=sk[2]+1;if(sk[3]==='heal'){S.healUses=(S.healUses||0)+1;let n=Math.min(7+S.level+talentBonus('heal')+2*(S.ranks[i]-1)+Math.floor(S.attrs[4]/3)+(i===4?5:0),S.maxHp-S.hp);S.hp+=n;if(i===4&&S.classId==='ranger')S.res=Math.min(S.maxRes,S.res+4);say('Soin : +'+n+' PV.')}else if(sk[3]==='guard'){S.guard=2+S.ranks[i]+(i===4?3:0)+talentBonus('guard');if(i===4&&S.classId==='rogue')S.veil=3;if(S.classId==='mage')S.shield=Math.max(S.shield,4+S.ranks[i]*2+(i===4?6:0)+talentBonus('shield'));say('Protection activée.')}else{S.boost=3+S.ranks[i];say('Prochaine attaque renforcée.')}finish()}
 function useDirection(dx,dy){let i=selected;selected=null;let sk=CLASSES[S.classId].skills[i],target=null,targets=[];if(!unlocked(i)||S.cool[i]||S.res<sk[1]){update();return}if(sk[3]==='direction'){let x=S.x+dx,y=S.y+dy;if(stepOK(x,y,S.x,S.y))target=mob(x,y)}else{for(let k=1;k<=5;k++){let x=S.x+dx*k,y=S.y+dy*k;if(!clear(x,y))break;if(!stepOK(x,y,x-dx,y-dy))break;let m=mob(x,y);if(m){targets.push(m);target??=m;if(!(i===3&&S.classId==='ranger'))break}}}if(!target){say('Aucune cible dans cette direction.');update();return}S.res-=sk[1];S.cool[i]=sk[2]+1;let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(S.level/3)+2*(S.ranks[i]-1)+(i===3?4+(S.nodes.o2?2:0):0);if(S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;hit(target,damage,{skill:true,ranged:sk[3]==='ranged'});if(monsters.includes(target)){if(S.classId==='warrior'&&i===3)target.exposed=4;if(S.classId==='rogue')target.bleed=3;if(S.classId==='mage'&&i===3)target.stun=1}if(S.classId==='ranger'&&i===3)for(const m of targets.slice(1))if(monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true});finish()}
 function bandage(){if(mode!=='game'||!overlay.classList.contains('hidden')||S.bandages<1||S.hp===S.maxHp)return;selected=null;S.bandages--;let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);S.hp+=n;say('Bandage : +'+n+' PV.');finish()}
