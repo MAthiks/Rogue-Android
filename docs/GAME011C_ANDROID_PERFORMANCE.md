@@ -21,3 +21,19 @@ CI uploads perf-results/ as an artifact. Baseline numbers are pending execution;
 - C7: compare same-runner measurements, preserve historical saves/permadeath and pixel art, four official CI controls, then physical Android recipe. No Pages publish or version bump here.
 
 Never modify ROGOV or its storage/cache. Production storage keys and gameplay remain unchanged.
+
+## C1 observed baseline
+CI run 45381406692, Chromium job 138401068270, artifact 14913228691. All 1,872 simulated turns and 72 real Chromium touch taps completed, zero uncaught page errors. Android run 45381406607 also succeeded. Mean timings in ms:
+| Viewport | Render | Reveal | Update | Save | Pointer to next rAF | 100 turns |
+|---|---:|---:|---:|---:|---:|---:|
+| 393x851 | 6.187 | 0.023 | 6.360 | 0.040 | 16.438 | 478.967 |
+| 320x640 | 6.377 | 0.037 | 6.567 | 0.045 | 16.371 | 478.950 |
+| 851x393 | 5.322 | 0.023 | 5.630 | 0.037 | 16.321 | 393.167 |
+
+Post-GC JS heap increase about 104 KiB per context; DOM nodes (680), event listeners (53) and documents (1) unchanged. No proof of native memory stability.
+
+## C2/C3 implementation
+- Single lazy 256x256 atlas (256 KiB nominal RGBA backing store), reset slot validity on biome switch; original procedural operations retained for environments without drawImage. Every tile begins with an opaque 16x16 base. No gameplay or save changes.
+- Frame-local terrain, feature and intent indexes retain first-match semantics. Draw order and entity overdraw unchanged. Viewport traversal clipped to map.
+- Reveal iterates only the radius-10 bounding box, up to 441 instead of 1536 candidate cells. Original LOS, corner checks, memory and reveal order unchanged.
+- CI runs baseline and candidate sequentially on the same Chromium runner and compares canvas hashes, all-cell visibility hashes, final raw save hashes and turn counts. Additional 54 scenes per viewport cover all eight biomes, return to first biome, three positions including map edges, closed/open doors, duplicate features/terrain, fog and creature intents. 162 scene comparisons total. No timing threshold; compare observed gains, repeat if noisy. No publication or physical test claimed.
