@@ -41,6 +41,30 @@ window.__perf011c={
   seen.fill(0);reveal();return seen.join('');
  },
  snapshot(){return JSON.stringify({S,map,seen,monsters,loot,stairs,features,terrain})},
+ // Compare live pixels and every visibility cell through biome switches, edge positions,
+ // duplicate entries, opening a door, fog, hidden entities and repaint.
+ scenes(){
+  const results=[];
+  this.fixture(true);
+  for(const biome of [...Object.keys(BIOMES),Object.keys(BIOMES)[0]]){
+   S.dungeon.biome=biome;
+   for(const [x,y] of [[24,16],[1,1],[46,30]]){
+    S.x=x;S.y=y;
+    const dx=x===46?-1:1,tx=x+dx,ty=y;
+    features=[{x:tx,y:ty,type:'door',open:false,found:true},{x:tx,y:ty,type:'chest',found:true,open:false}];
+    terrain=[{x,y,type:'water'},{x,y,type:'ember'}];
+    monsters=[{x:tx,y:ty,hp:10,maxHp:10,atk:1,role:'guardian',kind:'Fixture',color:'#bbb',intent:{cells:[{x,y}]}}];
+    loot=[{x:tx,y:ty,kind:'bandage'}];map[idx(tx,ty)]=1;
+    seen.fill(0);reveal();
+    for(const open of [false,true]){
+     if(open){features[0].open=true;map[idx(tx,ty)]=0;reveal()}
+     const expected=seen.slice();const before=this.snapshot();render();
+     results.push({biome,x,y,open,visibility:expected.join(''),pixels:this.pixels(),pure:before===this.snapshot()});
+    }
+   }
+  }
+  return results;
+ },
  turn(){return S.turn},
  cacheEntries(){return TILE_ART_CACHE.size},
  stress(n){
@@ -100,7 +124,11 @@ function stats(values){
    assert.deepEqual(errors,[]);
    const raw=await page.evaluate(()=>localStorage.getItem('rogue-android-game002-v1'));
    assert.equal(JSON.parse(raw).S.turn,624);
+   const scenes=await page.evaluate(()=>window.__perf011c.scenes());
+   assert.ok(scenes.every(s=>s.pure),'scene render purity');
+   const sceneHashes=scenes.map(({visibility,...scene})=>({...scene,visibilitySha256:crypto.createHash('sha256').update(visibility).digest('hex')}));
    report.profiles.push({width,height,canvas:profile.pixels,visibilitySha256,cacheEntries:profile.cacheEntries,
+    saveSha256:crypto.createHash('sha256').update(raw).digest('hex'),sceneHashes,
     functions:Object.fromEntries(Object.entries(profile.samples).map(([k,v])=>[k,stats(v)])),
     pointerToNextFrame:stats(input.samples),stress100Turns:stats(stress),turns:624,memoryBefore,memoryAfter,
     saveBytes:Buffer.byteLength(raw),pageErrors:errors});
