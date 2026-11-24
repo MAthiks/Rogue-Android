@@ -251,6 +251,39 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/bosses-8-final-phases-mobile.png'});
     await loadEnemies([...finalBosses,{...finalBosses[0],x:32,y:15}]);const hiddenBoss=await artPixels();
     await loadEnemies(finalBosses);assert.deepEqual(await artPixels(),hiddenBoss);
+    // GAME-007E: real canvas object states and shared inventory icon.
+    const objectFixture=JSON.parse(JSON.stringify(enemyFixture));
+    objectFixture.monsters=[];objectFixture.S.bag=[{id:900,slot:'weapon',family:'axe',rarity:3,name:'Hache de test',atk:1}];objectFixture.S.serial=900;
+    const objectFeatures=[
+      {type:'door',open:false},{type:'chest',open:false},{type:'trap',spent:false},
+      {type:'merchant',merchantId:'arms',stock:[]},{type:'event',eventId:'shrine',spent:false},
+      {type:'specialRoom',roomId:'library',spent:false},{type:'secret',found:false,open:false}
+    ].map((f,i)=>({found:true,...f,...cells[i]}));
+    const objectLoot=[
+      ...['blade','axe','mace','dagger','spear','bow','staff'].map(family=>({kind:'gear',item:{slot:'weapon',family,rarity:3}})),
+      ...['heal','focus','insight','ward','smoke','toolkit'].map(consumable=>({kind:'consumable',consumable})),
+      {kind:'bandage'}
+    ].map((l,i)=>({...l,...cells[i+7]}));
+    let objectLoad=0;
+    const loadObjects=async(features,loot)=>{
+      await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:{...objectFixture,features,loot},marker:'object-art-'+(++objectLoad)});
+      await page.reload();await page.locator('#resume').tap();
+    };
+    await loadObjects([],[]);const objectEmpty=await enemyPixels();
+    await loadObjects(objectFeatures,objectLoot);const objectFull=await enemyPixels();
+    assert.ok(objectFull.slice(0,21).every((v,i)=>i===6?v===objectEmpty[i]:v!==objectEmpty[i]));
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/objects-mobile.png'});
+    await page.locator('#inventory').tap();assert.equal(await page.locator('[data-equip="900"] svg').count(),1);
+    if(process.env.ROGUE_ART_PREVIEW)await page.locator('[data-equip="900"]').screenshot({path:'art-preview/inventory-object-icon.png'});
+    await page.locator('#close').tap();
+    const changedFeatures=objectFeatures.map((f,i)=>i<3?{...f,open:true,spent:true}:f);
+    await loadObjects(changedFeatures,objectLoot);const changedArt=await enemyPixels();
+    assert.ok(changedArt.slice(0,3).every((v,i)=>v!==objectFull[i]));
+    const objectSave=await read();await page.reload();await page.locator('#resume').tap();
+    assert.deepEqual(await enemyPixels(),changedArt);assert.deepEqual(await read(),objectSave);
+    if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/objects-open-mobile.png'});
+    await loadObjects(changedFeatures,[...objectLoot,{x:32,y:15,kind:'bandage'}]);const hiddenLoot=await artPixels();
+    await loadObjects(changedFeatures,objectLoot);assert.deepEqual(await artPixels(),hiddenLoot);
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
