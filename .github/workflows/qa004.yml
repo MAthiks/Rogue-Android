@@ -39,6 +39,8 @@ jobs:
           node tests/game008e3.cjs /tmp/cryptgrave-090.html
       - name: Verify illustrated class cards
         run: node tests/game009b.cjs
+      - name: Verify character dossier
+        run: node tests/game009c.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:

@@ -61,6 +61,31 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     // Verify real canvas geometry and nonempty rendered pixels.
     assert.ok(await page.locator('canvas').evaluate(c=>{const b=c.getBoundingClientRect(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let colors=new Set();for(let i=0;i<p.length;i+=4)colors.add(p[i]+','+p[i+1]+','+p[i+2]);return b.width>0&&b.height>0&&colors.size>3}));
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
+    // GAME-009C: inspect actual live dossier, and verify non-mutating rendering.
+    const sheetSave=await read();
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      const sheet=page.locator('.crypt-sheet');
+      await sheet.scrollIntoViewIfNeeded();
+      assert.equal(await sheet.locator('h1').textContent(),'Guerrier');
+      assert.equal(await sheet.locator('[data-sheet-meter="hp"]').textContent(),sheetSave.S.hp+'/'+sheetSave.S.maxHp);
+      assert.equal(await sheet.locator('[data-sheet-meter="res"]').textContent(),sheetSave.S.res+'/'+sheetSave.S.maxRes);
+      assert.equal(await sheet.locator('.sheet-sprite').count(),1);
+      assert.equal(await page.locator('.sheet-attributes [data-attr]').count(),6);
+      assert.equal(await page.locator('[data-rank] .sheet-rank-dots').count(),5);
+      assert.ok(await sheet.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'sheet fits');
+      if(process.env.ROGUE_ART_PREVIEW){await page.locator('#panel').evaluate(e=>e.scrollTop=0);await page.screenshot({path:'art-preview/character-sheet-'+width+'x'+height+'.png'});await page.locator('.sheet-attributes').screenshot({path:'art-preview/attributes-'+width+'x'+height+'.png'})}
+      assert.deepEqual(await read(),sheetSave);
+    }
+    await page.setViewportSize({width:393,height:851});
+    await page.locator('#close').tap();
+    // Exercise attribute and rank actions with an authentic save fixture.
+    const sheetFixture=await read();sheetFixture.S.ap=1;sheetFixture.S.points=1;sheetFixture.S.level=3;
+    await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:sheetFixture,marker:'sheet-009c'});
+    await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
+    await page.locator('[data-attr="2"]').tap();
+    let sheetAfter=await read();assert.equal(sheetAfter.S.ap,0);assert.equal(sheetAfter.S.attrs[2],sheetFixture.S.attrs[2]+1);assert.equal(sheetAfter.S.maxHp,sheetFixture.S.maxHp+2);
+    await page.locator('[data-rank="0"]').tap();sheetAfter=await read();assert.equal(sheetAfter.S.points,0);assert.equal(sheetAfter.S.ranks[0],sheetFixture.S.ranks[0]+1);assert.equal(sheetAfter.S.turn,sheetFixture.S.turn);
     await page.locator('#close').tap();
     // GAME-005A: persisted legendary pieces, mobile inventory, and live set activation.
     const fixture1=await page.evaluate(k=>{
