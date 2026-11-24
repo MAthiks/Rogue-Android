@@ -94,6 +94,7 @@ function testCampaignBalance(newHtml){
   assert(b.gearPrice({itemLevel:15,rarity:3})===65&&b.gearPrice({itemLevel:30,rarity:3})===110,'late pricing');
   const sum=k=>progression.reduce((n,v)=>n+v[k],0)/progression.length;
   assert(results.every(r=>r.wins+r.losses+r.stalls===60),'all paths exercised');
+  assert(results.every(r=>r.wins>=50&&r.stalls<=5),'isolated encounter regression threshold');
   return {campaignModels:40,floors,transactions,meanKills:Math.round(sum('kills')),meanGoldAfterPurchases:Math.round(sum('gold')),meanSpend:Math.round(sum('spend')),duels:480,turns,results,regen:'passed',bossHP:'passed',pricing:'passed'};
 }
 console.log(testCampaignBalance(fs.readFileSync(path.join(__dirname,'../index.html'),'utf8')));
