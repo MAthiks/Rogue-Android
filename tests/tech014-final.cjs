@@ -122,7 +122,7 @@ for(const id of CLASSES_IDS){
 }
 const campaigns=[];
 for(const [i,id] of CLASSES_IDS.entries()){
- const run=longCampaign(html,id,1234567+i*104729,2500),replay=createSession(original,run.seed);
+ const run=longCampaign(html,id,1234567+i*104729,3200),replay=createSession(original,run.seed);
  eq(replay.start(id),run.initialState);checks++;
  for(const [j,c] of run.commands.entries()){replay.action(c);eq(record(replay),run.trace[j+1]);checks++}
  eq(replay.snapshot(),run.finalState);eq(replay.history(),run.history);checks+=2;
