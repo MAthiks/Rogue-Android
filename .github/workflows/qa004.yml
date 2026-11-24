@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, 'release/**']
   workflow_dispatch:
+    inputs:
+      publish_pages:
+        description: 'Publish validated main build to GitHub Pages'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -94,3 +99,49 @@ jobs:
           path: candidate/
           retention-days: 30
           if-no-files-found: error
+
+  pwa:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --no-package-lock playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/game008c-pwa.cjs
+      - run: node tools/build-pwa.cjs pwa-dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rogue-pwa-preview
+          path: pwa-dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+
+  pages-deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_pages == true
+    needs: [engine, chromium-mobile, pwa]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    concurrency:
+      group: rogue-pages-production
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: rogue-pwa-preview
+          path: pwa-dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pwa-dist
+      - name: Deploy tested PWA
+        id: deployment
+        uses: actions/deploy-pages@v4
