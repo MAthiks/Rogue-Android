@@ -37,3 +37,19 @@ Post-GC JS heap increase about 104 KiB per context; DOM nodes (680), event liste
 - Frame-local terrain, feature and intent indexes retain first-match semantics. Draw order and entity overdraw unchanged. Viewport traversal clipped to map.
 - Reveal iterates only the radius-10 bounding box, up to 441 instead of 1536 candidate cells. Original LOS, corner checks, memory and reveal order unchanged.
 - CI runs baseline and candidate sequentially on the same Chromium runner and compares canvas hashes, all-cell visibility hashes, final raw save hashes and turn counts. Additional 54 scenes per viewport cover all eight biomes, return to first biome, three positions including map edges, closed/open doors, duplicate features/terrain, fog and creature intents. 162 scene comparisons total. No timing threshold; compare observed gains, repeat if noisy. No publication or physical test claimed.
+
+## C2/C3 measured results
+Run 45382101207 (Chromium job 138403464198) and Android run 45382101063: all four controls succeeded on commit 126b1a3.
+| Viewport | Render before/after ms | Update before/after ms | 100 turns before/after ms |
+|---|---|---|---|
+| 393x851 | 6.170 / 4.667 | 6.550 / 5.118 | 480.733 / 360.550 |
+| 320x640 | 6.320 / 4.630 | 6.687 / 5.213 | 485.067 / 364.267 |
+| 851x393 | 5.472 / 3.960 | 5.872 / 4.407 | 404.767 / 307.017 |
+162/162 additional scene comparisons, original visibility and raw save hash equality passed. Pointer-to-rAF around 16.3 ms without material improvement; do not claim physical latency. Nominal atlas allocation is not included in JS heap measurements.
+
+## C4/C5/C6 implementation
+- Retain identical HUD HTML using element-keyed WeakMap; unchanged markup keeps the original nodes. Resize backing canvas only when dimensions differ; still render synchronously. No input event, repeat, targeting, turn or save timing changes. Browser test exercises all eight directions and stable icons.
+- Preserve existing production PWA cache policy and native asset loader (no evidence requiring a change). New PWA test simulates changed shell and worker revision, checks waiting state, offline old shell, closing last client, activation, old-cache deletion and preservation of saves and sibling project storage. It does not deploy a real release.
+- Long stress adds 1200 moves per viewport to the 624-turn reference, six post-GC heap/DOM checkpoints, three reload/orientation cycles, equality of final raw save hashes. 5472 turns per build, 10944 across both. Native Android emulator test adds three background/recreation cycles, origin and absence of active service worker checks; app-process PSS samples are logged (not total WebView renderer memory). No fixed heap threshold until a trend is measured.
+- Physical Android recipe: export backup first, use separate preview application when packaged, check eight directions/targeting, zoom and orientation, background/resume, force close/reopen, offline reload and PWA upgrade across two tabs, sustained 20-minute play and any visible stalls. Never clear app data or release until approved.
+- Latest candidate CI pending; do not extrapolate C2/C3 measurements to C4–C6 until retested.
