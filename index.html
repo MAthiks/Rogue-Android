@@ -178,24 +178,24 @@ button:active{background:#735b3d;box-shadow:inset 0 0 0 1px #d4b97d}button:focus
 @media(max-height:430px){#app>header{min-height:56px;padding:3px 6px}.hud-meter{padding:2px 3px}.meter-track{height:6px}#hudMeters{margin-top:2px}#app>footer{min-height:138px;padding-top:3px;padding-bottom:3px}.skills button{flex-direction:row;flex-wrap:wrap;min-height:32px;column-gap:3px;row-gap:1px}.skills button .skill-icon{width:13px;height:13px}.skills button .skill-cost{font-size:8px}#log{height:27px}#app>footer .tiny{font-size:8px}}
 </style></head><body><div id="app"><header><div class="hud-top"><div class="hud-identity"><span id="hudClass" aria-hidden="true"></span><strong>CRYPTGRAVE <span id="biomeName" style="color:#c9baa1">Les profondeurs</span></strong></div><span id="stats">Android · tour par tour</span></div><div id="hudMeters"></div></header><main><canvas id="game" width="640" height="384" aria-label="Carte du donjon"></canvas><div id="combatFx" aria-hidden="true"></div></main><footer><div class="pad" id="pad"><button data-d="-1,-1" aria-label="Nord-ouest">↖</button><button data-d="0,-1" aria-label="Nord">↑</button><button data-d="1,-1" aria-label="Nord-est">↗</button><button data-d="-1,0" aria-label="Ouest">←</button><button id="wait" aria-label="Attendre et fouiller">●</button><button data-d="1,0" aria-label="Est">→</button><button data-d="-1,1" aria-label="Sud-ouest">↙</button><button data-d="0,1" aria-label="Sud">↓</button><button data-d="1,1" aria-label="Sud-est">↘</button></div><div class="right"><div id="log" aria-live="polite" aria-label="Journal de combat">Choisis une classe.</div><div class="skills"><button data-skill="0">Talent 1</button><button data-skill="1">Talent 2</button><button data-skill="2">Talent 3</button></div><div class="tools"><button id="weaponAction" disabled>Arme</button><button id="bandage">Bandage</button><button id="inventory">Équipement</button><button id="consumables">Objets</button><button id="menu">Menu</button></div><div class="tiny">8 directions · ● attendre/fouiller · soins limités/étage</div></div></footer></div><div id="overlay"><div class="panel" id="panel"></div></div><script>
 (()=>{'use strict';
-// TECH-012C — Dimensions de la grille logique (W, H), taille native des sprites (T) et références DOM. KEY est une clé historique : la renommer empêcherait de retrouver les sauvegardes existantes.
+/* TECH-012C — Dimensions de la grille logique (W, H), taille native des sprites (T) et références DOM. KEY est une clé historique : la renommer empêcherait de retrouver les sauvegardes existantes. */
 const W=48,H=32,T=16,VIEWW=40,VIEWH=24,KEY='rogue-android-game002-v1',canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),log=document.getElementById('log'),stats=document.getElementById('stats'),overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
-// TECH-012C — Catalogue des quatre classes. Chaque compétence est décrite par [nom, coût en ressource, recharge en tours, mode de ciblage].
+/* TECH-012C — Catalogue des quatre classes. Chaque compétence est décrite par [nom, coût en ressource, recharge en tours, mode de ciblage]. */
 const CLASSES={warrior:{name:'Guerrier',desc:'Robuste · parade et frappe',hp:28,res:'Endurance',maxRes:12,color:'#a5c8ce',skills:[['Frappe',3,3,'direction'],['Souffle',4,6,'heal'],['Garde',2,5,'guard']]},rogue:{name:'Voleur',desc:'Rapide · critique et esquive',hp:21,res:'Énergie',maxRes:14,color:'#b8c49a',skills:[['Estoc',3,3,'direction'],['Esquive',3,5,'guard'],['Focus',2,5,'boost']]},ranger:{name:'Rôdeur',desc:'Précis · tirs et survie',hp:23,res:'Concentration',maxRes:12,color:'#d2bd88',skills:[['Tir',3,3,'ranged'],['Soin',4,6,'heal'],['Visée',2,5,'boost']]},mage:{name:'Arcaniste',desc:'Fragile · magie à distance',hp:18,res:'Mana',maxRes:16,color:'#b4a8db',skills:[['Éclair',4,3,'ranged'],['Soin',5,6,'heal'],['Barrière',3,5,'guard']]}};
 const ADV={warrior:[['Brise-garde',5,5,'direction'],['Bastion',5,8,'guard']],rogue:[['Exécution',6,5,'direction'],['Disparition',4,8,'guard']],ranger:[['Tir perforant',5,5,'ranged'],['Second souffle',5,8,'heal']],mage:[['Décharge',6,5,'ranged'],['Égide',5,8,'guard']]};for(const k of Object.keys(ADV))CLASSES[k].skills.push(...ADV[k]);const unlocked=i=>i<3||!!S.activeTalents[i];const PREF='rogue-android-display-v1';let prefs={zoom:100,pad:100};try{const p=JSON.parse(localStorage.getItem(PREF));if(p){if([75,100,125,150,200].includes(p.zoom))prefs.zoom=p.zoom;if([85,100,115].includes(p.pad))prefs.pad=p.pad}}catch(e){};
-// TECH-012A — Applique les préférences d'affichage et de commandes tactiles, puis recalcule la taille de la carte. L'échec du stockage des préférences ne doit pas bloquer le jeu.
+/* TECH-012A — Applique les préférences d'affichage et de commandes tactiles, puis recalcule la taille de la carte. L'échec du stockage des préférences ne doit pas bloquer le jeu. */
 function applyPrefs(){const small=innerHeight<=430;document.documentElement.style.setProperty('--padw',Math.round((small?42:46)*prefs.pad/100)+'px');document.documentElement.style.setProperty('--padh',Math.round((small?38:43)*prefs.pad/100)+'px');try{localStorage.setItem(PREF,JSON.stringify(prefs))}catch(e){};resizeMap()}
-// TECH-012A — Dimensionne le canvas par cases entières à partir de l'espace disponible et du zoom. Ne réalloue le canvas que si sa taille change, pour limiter le coût du rendu.
+/* TECH-012A — Dimensionne le canvas par cases entières à partir de l'espace disponible et du zoom. Ne réalloue le canvas que si sa taille change, pour limiter le coût du rendu. */
 function resizeMap(){const m=canvas.parentElement;const w=Math.max(16,m.clientWidth-6),h=Math.max(16,m.clientHeight-6);const scale= Math.max(1,Math.floor(Math.min(w/40,h/24)/16*16));const tile=Math.max(1,Math.round(scale*prefs.zoom/100));const cw=Math.max(1,Math.floor(w/tile))*T,ch=Math.max(1,Math.floor(h/tile))*T;if(canvas.width!==cw)canvas.width=cw;if(canvas.height!==ch)canvas.height=ch;const sw=(cw/T*tile)+'px',sh=(ch/T*tile)+'px';if(canvas.style.width!==sw)canvas.style.width=sw;if(canvas.style.height!==sh)canvas.style.height=sh;render()}
 function options(back){show(`<h1>Options graphiques</h1><label for="zoom">Zoom du donjon</label><select id="zoom">${[75,100,125,150,200].map(n=>`<option value="${n}" ${prefs.zoom===n?'selected':''}>${n}%</option>`).join('')}</select><label for="padsize">Taille du pavé</label><select id="padsize">${[85,100,115].map(n=>`<option value="${n}" ${prefs.pad===n?'selected':''}>${n}%</option>`).join('')}</select><button class="wide" id="full">Basculer plein écran</button><p id="fullstatus" aria-live="polite"></p><button class="wide" id="defaults">Réglages par défaut</button><button class="wide" id="optback">Retour</button>`);document.getElementById('zoom').onchange=e=>{prefs.zoom=+e.target.value;applyPrefs()};document.getElementById('padsize').onchange=e=>{prefs.pad=+e.target.value;applyPrefs()};document.getElementById('defaults').onclick=()=>{prefs={zoom:100,pad:100};applyPrefs();options(back)};document.getElementById('full').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(e){document.getElementById('fullstatus').textContent='Plein écran indisponible dans ce navigateur.'}};document.getElementById('optback').onclick=back}
-// TECH-012C — État partagé du moteur : S contient le personnage et sa progression ; map, seen, monsters, loot, stairs, features et terrain décrivent l'étage. selected désigne le ciblage en attente ; mode distingue le menu et la partie.
+/* TECH-012C — État partagé du moteur : S contient le personnage et sa progression ; map, seen, monsters, loot, stairs, features et terrain décrivent l'étage. selected désigne le ciblage en attente ; mode distingue le menu et la partie. */
 let S=null,map=[],seen=[],monsters=[],loot=[],stairs=null,features=[],terrain=[],selected=null,mode='start',messages=[];
-// TECH-012C — Utilitaires de grille : idx convertit une coordonnée en index linéaire, clear teste une case libre, dist utilise la distance de Chebyshev adaptée aux huit directions.
+/* TECH-012C — Utilitaires de grille : idx convertit une coordonnée en index linéaire, clear teste une case libre, dist utilise la distance de Chebyshev adaptée aux huit directions. */
 const rand=n=>Math.floor(Math.random()*n),idx=(x,y)=>y*W+x,inside=(x,y)=>x>=0&&y>=0&&x<W&&y<H,clear=(x,y)=>inside(x,y)&&map[idx(x,y)]===0,dist=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y));
 function say(t){messages.unshift(t);messages=messages.slice(0,3);log.textContent=messages.join('\n')}
 function show(html){panel.innerHTML=html;overlay.classList.remove('hidden')}
 function hide(){overlay.classList.add('hidden')}
-// TECH-012A — Enregistre la partie active et les données du donjon dans le stockage local. Une partie morte ou terminée ne doit pas redevenir une sauvegarde reprenable.
+/* TECH-012A — Enregistre la partie active et les données du donjon dans le stockage local. Une partie morte ou terminée ne doit pas redevenir une sauvegarde reprenable. */
 function save(){
   if(S&&!S.dead&&!S.ended){
     try{
@@ -205,11 +205,11 @@ function save(){
     }
   }
 }
-// TECH-012A — Vérifie les données persistées avant de restaurer le donjon et le personnage. Retourne false si la sauvegarde est absente ou invalide, puis applique la migration si elle est valide.
+/* TECH-012A — Vérifie les données persistées avant de restaurer le donjon et le personnage. Retourne false si la sauvegarde est absente ou invalide, puis applique la migration si elle est valide. */
 function restore(){clearCombatFx();S=null;selected=null;try{let d=JSON.parse(localStorage.getItem(KEY));if(!d||!Object.hasOwn(CLASSES,d.S?.classId)||d.S.dead||d.S.ended||d.map.length!==W*H||d.seen.length!==W*H||!Array.isArray(d.monsters)||!Array.isArray(d.loot)||!d.stairs)return false;({S,map,seen,monsters,loot,stairs}=d);features=Array.isArray(d.features)?d.features:[];terrain=Array.isArray(d.terrain)?d.terrain:[];migrate();return true}catch(e){S=null;selected=null;return false}}
 const ATTR=['Force','Dextérité','Constitution','Volonté','Intelligence','Perception'];
 const BASE={warrior:[4,2,4,2,1,2],rogue:[2,4,2,2,1,4],ranger:[2,4,2,3,1,4],mage:[1,2,2,4,4,2]};
-// TECH-012A — Complète les champs absents des anciennes sauvegardes et remet en état la barre de compétences. Le compteur d'objets doit rester au moins égal aux identifiants déjà attribués.
+/* TECH-012A — Complète les champs absents des anciennes sauvegardes et remet en état la barre de compétences. Le compteur d'objets doit rester au moins égal aux identifiants déjà attribués. */
 function migrate(){S.attrs??=[...BASE[S.classId]];S.ap??=0;S.ranks??=[1,1,1];S.bag??=[];S.equip??={weapon:null,armor:null,ring:null};S.serial??=0;S.spec??=null;S.nodes??={};S.activeTalents??={};S.veil??=0;S.shield??=0;S.bar??=[0,1,2];if(!Array.isArray(S.bar)||S.bar.length!==3||new Set(S.bar).size!==3||S.bar.some(i=>!Number.isInteger(i)||i<0||i>4||!unlocked(i)))S.bar=[0,1,2];while(S.cool.length<5)S.cool.push(0);while(S.ranks.length<5)S.ranks.push(1);S.equip.helmet??=null;S.equip.boots??=null;S.serial=Math.max(S.serial,...S.bag.map(i=>i.id||0),...Object.values(S.equip).map(i=>i?.id||0),...loot.map(l=>l.item?.id||0))}
 // GAME-005A: new metadata is additive; legacy items keep their exact stats.
 const GEAR_SLOTS={weapon:'Arme',armor:'Armure',ring:'Anneau',helmet:'Casque',boots:'Bottes'};
@@ -236,15 +236,15 @@ const STYLES={
   defensive:{name:'Défensif',power:-1,def:1,desc:'−1 dégât de base, +1 défense'}
 };
 function weaponFamily(it){if(!it||it.slot!=='weapon')return null;if(it.family&&Object.hasOwn(WEAPONS,it.family))return it.family;return null}
-// TECH-012C — Retourne le profil de l'arme équipée ou le profil historique de contact si aucune famille reconnue n'est disponible.
+/* TECH-012C — Retourne le profil de l'arme équipée ou le profil historique de contact si aucune famille reconnue n'est disponible. */
 function currentWeapon(){return WEAPONS[weaponFamily(S.equip.weapon)]??{name:'Arme classique',range:1,cost:0,power:0,crit:0,desc:'Attaque de contact historique'}}
 function currentStyle(){return STYLES[Object.hasOwn(STYLES,S.combatStyle)?S.combatStyle:'balanced']}
-// TECH-012C — Combine les propriétés de l'arme et du style de combat pour une attaque de base ; l'arc et le bâton subissent une pénalité au contact.
+/* TECH-012C — Combine les propriétés de l'arme et du style de combat pour une attaque de base ; l'arc et le bâton subissent une pénalité au contact. */
 function basicProfile(target,atRange=false){
   const w=currentWeapon(),style=currentStyle(),family=weaponFamily(S.equip.weapon);
   return {...(atRange?{ranged:true}:{}),power:w.power+style.power+(!atRange&&family==='bow'?-1:!atRange&&family==='staff'?-2:0),crit:w.crit-(w.critPenalty||0),pierce:w.pierce||0};
 }
-// TECH-012C — Parcourt les cases dans la direction demandée jusqu'à la portée maximale. Le premier obstacle arrête la recherche ; le premier ennemi accessible est la cible.
+/* TECH-012C — Parcourt les cases dans la direction demandée jusqu'à la portée maximale. Le premier obstacle arrête la recherche ; le premier ennemi accessible est la cible. */
 function aimedTarget(dx,dy,range){
   if(!Number.isInteger(dx)||!Number.isInteger(dy)||Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy))return null;
   for(let k=1;k<=range;k++){const x=S.x+dx*k,y=S.y+dy*k;if(!stepOK(x,y,x-dx,y-dy))break;const m=mob(x,y);if(m)return {m,distance:k}}
@@ -392,7 +392,7 @@ function canUseConsumable(id){
  if(id==='ward')return S.shield<8+Math.floor(S.level/3);
  return consumableTargets(id).length>0;
 }
-// TECH-012C — Vérifie que le consommable est utilisable avant de le retirer de la sacoche et d'appliquer son effet.
+/* TECH-012C — Vérifie que le consommable est utilisable avant de le retirer de la sacoche et d'appliquer son effet. */
 function useConsumable(id){
  if(mode!=='game'||!overlay.classList.contains('hidden')||!canUseConsumable(id))return false;
  selected=null;S.pouch[id]=pouchCount(id)-1;let msg=CONSUMABLES[id].name;
@@ -452,7 +452,7 @@ function addDeepSecret(d,decorated,W,H,floor){
  return true;
 }
 function explorationRng(seed){let s=(seed^0x75e12c4b)>>>0;s=Math.imul(s^(s>>>16),0x7feb352d);s=Math.imul(s^(s>>>15),0x846ca68b);s=(s^(s>>>16))>>>0;return n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)}}
-// TECH-012A — Sélectionne les événements disponibles selon la profondeur et cherche des emplacements libres à distance du départ. Utilise une source pseudo-aléatoire dérivée de la graine du donjon.
+/* TECH-012A — Sélectionne les événements disponibles selon la profondeur et cherche des emplacements libres à distance du départ. Utilise une source pseudo-aléatoire dérivée de la graine du donjon. */
 function buildExploration(d,decorated,terrain,existing,monsters,floor){
  const rnd=explorationRng(d.seed),used=new Set([d.start,d.stairs,...monsters,...existing,...decorated.features,...terrain].map(p=>p.x+','+p.y));
  const eligible=Object.entries(EXPLORATION_EVENTS).filter(([,e])=>floor>=e.min),candidates=[];
@@ -555,7 +555,7 @@ function attackAttribute(profile=null){
  const index={blade:0,axe:0,mace:0,dagger:1,bow:1,staff:4}[family];
  return S.attrs[index??fallback];
 }
-// TECH-012A — Calcule les dégâts du joueur en combinant arme, attribut, équipement, talents et effets contextuels. Applique ensuite le critique puis la protection de l'affixe armored.
+/* TECH-012A — Calcule les dégâts du joueur en combinant arme, attribut, équipement, talents et effets contextuels. Applique ensuite le critique puis la protection de l'affixe armored. */
 function outgoingDamage(m,damage,profile=null,critical=false){
  let d=Math.max(1,damage+(profile?.power||0)+S.atk+bonus('atk')+Math.floor(attackAttribute(profile)/4)+(S.boost>0?3:0));
  if(S.spec==='offense')d+=2;if(m.exposed>0)d+=2;if(S.nodes.o1)d++;if(S.nodes.master)d+=2;
@@ -565,7 +565,7 @@ function outgoingDamage(m,damage,profile=null,critical=false){
  if(m.affix==='armored')d=Math.max(1,d-Math.max(0,2-(profile?.pierce||0)));
  return d;
 }
-// TECH-012A — Calcule les dégâts subis après réduction défensive. À partir de l'étage 7, une fraction minimale des dégâts bruts empêche l'armure de neutraliser totalement les attaques.
+/* TECH-012A — Calcule les dégâts subis après réduction défensive. À partir de l'étage 7, une fraction minimale des dégâts bruts empêche l'armure de neutraliser totalement les attaques. */
 function incomingDamage(m,power=0,variance=0){
  const raw=m.atk+power+(m.affix==='furious'&&m.hp*2<=m.maxHp?2:0)+variance;
  const reduction=S.armor+bonus('def')+currentStyle().def+talentBonus('def')+Math.floor(S.attrs[2]/6)+(S.guard>0?2:0)+(S.spec==='defense'?1:0)+(S.nodes.d1?1:0)+doctrineBonus(S,'def');
@@ -600,9 +600,9 @@ const UNIQUES=[
   {key:'vent',slot:'boots',name:'Marche du Vent',stats:{dodge:5,def:1}}
 ];
 function setCount(equip,key){const set=GEAR_SETS[key];return set?Object.entries(set.pieces).filter(([slot,name])=>equip[slot]?.setId===key&&equip[slot]?.slot===slot&&equip[slot]?.name===name).length:0}
-// TECH-012C — Cumule les bonus de chaque ensemble équipé aux seuils de deux et trois pièces.
+/* TECH-012C — Cumule les bonus de chaque ensemble équipé aux seuils de deux et trois pièces. */
 function setBonus(equip,k){return Object.keys(GEAR_SETS).reduce((n,key)=>{const count=setCount(equip,key),set=GEAR_SETS[key];return n+(count>=2?(set.two[k]||0):0)+(count>=3?(set.three[k]||0):0)},0)}
-// TECH-012C — Additionne les propriétés des objets équipés et les bonus d'ensemble pour la statistique demandée.
+/* TECH-012C — Additionne les propriétés des objets équipés et les bonus d'ensemble pour la statistique demandée. */
 function bonus(k){return Object.values(S.equip).reduce((n,i)=>n+(i?.[k]||0),0)+setBonus(S.equip,k)}
 function rarityOf(it){if(Number.isInteger(it.rarity)&&it.rarity>=1&&it.rarity<=5)return it.rarity;if(it.bossRelic)return 5;return it.name?.startsWith('Épique')?4:it.name?.startsWith('Rare')?3:1}
 function rollRarity(floor,roll,minimum=1){
@@ -610,7 +610,7 @@ function rollRarity(floor,roll,minimum=1){
   const tier=roll<1+shift?5:roll<5+2*shift?4:roll<20+4*shift?3:roll<45+5*shift?2:1;
   return Math.max(minimum,tier);
 }
-// TECH-012C — Génère un équipement selon la profondeur, le niveau de rareté minimal et le générateur fourni. L'identifiant est transmis par l'appelant.
+/* TECH-012C — Génère un équipement selon la profondeur, le niveau de rareté minimal et le générateur fourni. L'identifiant est transmis par l'appelant. */
 function createGear(id,floor,minimum=1,rng=rand,forcedRarity=null){
   const depth=Math.max(1,Math.min(30,floor)),grade=1+Math.floor((depth-1)/8);
   const slots=Object.keys(GEAR_SLOTS),slot=slots[rng(slots.length)];
@@ -666,7 +666,7 @@ function runSummary(outcome){
  const score=Math.min(1000000000,floor*100+level*50+kills*10+relics*100+gold+(outcome==='victory'?2000:0));
  return {classId:S.classId,spec:S.spec||null,outcome,floor,level,kills,turns,gold,relics,score};
 }
-// TECH-012A — Ajoute le bilan au journal des parties, limite la liste récente et actualise les statistiques cumulées et les défis débloqués.
+/* TECH-012A — Ajoute le bilan au journal des parties, limite la liste récente et actualise les statistiques cumulées et les défis débloqués. */
 function recordRun(r){
  const h=readHistory();h.runs.unshift(r);h.runs=h.runs.slice(0,HISTORY_LIMIT);h.total++;
  if(r.outcome==='victory'){h.wins++;h.classWins[r.classId]++;h.fastestWin=h.fastestWin===null?r.turns:Math.min(h.fastestWin,r.turns)}
@@ -683,7 +683,7 @@ function historyMenu(back=startMenu){
  show('<h1>Panthéon des aventuriers</h1><p>Parties : '+h.total+' · Victoires : '+h.wins+' · Morts : '+h.deaths+' · Abandons : '+h.abandoned+'</p><p>Meilleur score : '+h.bestScore+' · Étage record : '+h.bestFloor+' · Ennemis record : '+h.bestKills+'<br>Victoire la plus rapide : '+(h.fastestWin===null?'—':h.fastestWin+' tours')+'</p><h2>Défis</h2>'+challenges.map(([id,name,desc])=>'<p><b>'+(h.challenges.includes(id)?'✓ ':'○ ')+name+'</b><br><small>'+desc+'</small></p>').join('')+'<h2>Victoires par classe</h2>'+Object.keys(CLASSES).map(k=>'<p>'+CLASSES[k].name+' : '+h.classWins[k]+'</p>').join('')+'<h2>Dernières parties (50 max.)</h2>'+(h.runs.map(r=>'<h3>'+outcomeLabel(r.outcome)+'</h3>'+summaryMarkup(r)).join('')||'<p>Aucune partie terminée.</p>')+'<button class="wide" id="historyBack">Retour</button>');
  document.getElementById('historyBack').onclick=back;
 }
-// TECH-012C — Centralise la fin de partie et empêche de la comptabiliser deux fois. La victoire exige la sortie finale accessible, le joueur vivant et les boss vaincus.
+/* TECH-012C — Centralise la fin de partie et empêche de la comptabiliser deux fois. La victoire exige la sortie finale accessible, le joueur vivant et les boss vaincus. */
 function endRun(outcome){
  if(!S||S.ended||!['victory','death','abandoned'].includes(outcome))return false;
  if(outcome==='victory'&&(S.dead||S.hp<=0||S.floor<FINAL_FLOOR||S.x!==stairs.x||S.y!==stairs.y||monsters.some(m=>m.boss&&m.hp>0)||loot.some(l=>l.x===stairs.x&&l.y===stairs.y)))return false;
@@ -738,7 +738,7 @@ function validateTransferHistory(h){
  transferAssert(h.challenges.every(k=>['first-win','swift','collector','all-classes'].includes(k)));
  for(const r of h.runs){transferAssert(transferObject(r)&&Object.hasOwn(CLASSES,r.classId)&&['victory','death','abandoned'].includes(r.outcome)&&[null,'offense','defense'].includes(r.spec));for(const k of ['floor','level','kills','turns','gold','relics','score'])transferAssert(transferInt(r[k]))}
 }
-// TECH-012A — Valide le format, la structure et les préférences d'un paquet de transfert avant son utilisation. Une donnée invalide provoque une erreur plutôt qu'une restauration partielle.
+/* TECH-012A — Valide le format, la structure et les préférences d'un paquet de transfert avant son utilisation. Une donnée invalide provoque une erreur plutôt qu'une restauration partielle. */
 function parseTransfer(text){
  transferAssert(typeof text==='string'&&text.length>0&&text.length<=TRANSFER_LIMIT);const b=JSON.parse(text);transferTree(b);
  transferAssert(transferObject(b)&&b.format===TRANSFER_FORMAT&&Object.keys(b).length===4);
@@ -750,7 +750,7 @@ function exportTransfer(){
  const data=JSON.stringify({format:TRANSFER_FORMAT,run:raw===null?null:JSON.parse(raw),history:h===null?null:readHistory(),prefs:{zoom:prefs.zoom,pad:prefs.pad}});
  parseTransfer(data);return data;
 }
-// TECH-012C — Autorise l'import uniquement au menu principal. Valide le paquet avant l'écriture et tente de restaurer les anciennes données si le stockage échoue.
+/* TECH-012C — Autorise l'import uniquement au menu principal. Valide le paquet avant l'écriture et tente de restaurer les anciennes données si le stockage échoue. */
 function importTransfer(text){
  if(mode!=='start')throw Error('Retourne au menu principal.');
  const b=parseTransfer(text),entries=[[KEY,b.run],[HISTORY_KEY,b.history],[PREF,b.prefs]],old=entries.map(([k])=>[k,localStorage.getItem(k)]);
@@ -795,7 +795,7 @@ function recoveryMenu(){
  document.getElementById('recoveryBack').onclick=startMenu;
 }
 function startMenu(){mode='start';clearCombatFx();setHudMarkup(document.getElementById('hudMeters'),'');setHudMarkup(document.getElementById('hudClass'),'');const resume=!!localStorage.getItem(KEY);show(`<section class="crypt-start"><div class="crypt-hero"><svg viewBox="0 0 480 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cgSky" x2="0" y2="1"><stop stop-color="#230d19"/><stop offset=".5" stop-color="#92303a"/><stop offset="1" stop-color="#dc744b"/></linearGradient><radialGradient id="cgMoon"><stop stop-color="#ffd68c"/><stop offset="1" stop-color="#d99262"/></radialGradient><linearGradient id="cgStone" x2="0" y2="1"><stop stop-color="#635957"/><stop offset="1" stop-color="#28252c"/></linearGradient><linearGradient id="cgCape" x2=".85" y2="1"><stop stop-color="#b1443e"/><stop offset=".55" stop-color="#78282e"/><stop offset="1" stop-color="#340f1c"/></linearGradient><linearGradient id="cgSteel" x2="1" y2=".8"><stop stop-color="#c7c6b8"/><stop offset=".4" stop-color="#77818a"/><stop offset="1" stop-color="#343a48"/></linearGradient></defs><path fill="url(#cgSky)" d="M0 0h480v300H0z"/><circle cx="342" cy="119" r="69" fill="url(#cgMoon)" opacity=".85"/><path fill="#54202d" opacity=".58" d="M0 104l79-16 58 14 56-11 47 9-79 8-90-4L0 118zm256 42l94-15 130 4v12l-102-4-61 10z"/><path fill="#49202a" d="M0 173l58-62 39 34 43-22 51 46 40-15 48 28 67-48 27 21 44-35 63 47v133H0z"/><path fill="#30242c" d="M0 204l51-36 35 15 45-25 47 23 35-10 77 28 41-25 52 20 42-31 55 19v118H0z"/><g stroke="#201d25" stroke-width="2" stroke-linejoin="miter"><path fill="url(#cgStone)" d="M101 230V129h10v-13h12v13h13v-13h12v13h10v30h23V99h10V86h11v13h11V86h12v13h10V70l25-31 25 31v29h12V86h11v13h11V86h12v13h10v60h23v-30h11v-13h12v13h12v-13h12v13h10v101z"/><path fill="#38343d" d="M235 70l25-31 25 31zM180 158h55v72h-55zm106 0h55v72h-55z"/><path fill="#201d27" d="M239 230v-44q21-30 42 0v44z"/><path fill="#ad593b" opacity=".7" d="M255 111h9v23h-9zm-63 11h9v19h-9zm123 0h9v19h-9z"/><path fill="#858075" opacity=".55" stroke="none" d="M111 145h38v3h-38zm0 17h49v3h-49zm70-12h53v3h-53zm105 0h54v3h-54zm76-5h46v3h-46zm-112-55h20v3h-20zM181 181h46v3h-46zm112 0h45v3h-45z"/><path fill="#1c1b25" d="M0 229l87-17 74 15 35-5 68 17 68-16 60 4 88-25v98H0z"/></g><path fill="#0f121b" d="M0 259l40-23 62 8 42-10 54 16 66 12 80-9 60-16 76 16v47H0z"/><path fill="#6b514c" opacity=".6" d="M0 264l70-17 60 11 53-10 45 15-67-6-56 11-65-9L0 276zM340 271l66-24 74 11v7l-69-8-44 18z"/><g stroke="#16151e" stroke-width="3" stroke-linejoin="round"><path fill="#232633" d="M147 300l8-49 29-23 28-5 32 12 36 52 3 13z"/><path fill="url(#cgCape)" d="M177 229q-37 3-77 23L22 272l52 8-20 20h166l-6-29-21-34z"/><path fill="#401d2a" stroke="none" d="M178 240l-49 19-52 16 66-8 42-17-24 50h21l22-47z"/><path fill="url(#cgSteel)" d="M163 232l-10-22 6-26 24-14 29 7 19 23-8 26-24 13z"/><path fill="#383b49" d="M182 173l-9-10 28-3 17 15-9 4z"/><path fill="#bab6a8" stroke="none" d="M163 205l6-20 17-10 13 2-22 14-6 22z"/><path fill="#232732" d="M194 188l28 8-1 10-23-3z"/><path fill="url(#cgSteel)" d="M222 230l20-9 22 16-8 23-22 4-13-15z"/><path fill="#6c707b" d="M251 244l13-15 27-37 13 8-19 41-22 20z"/><path fill="#b5a27c" d="M286 187l29 15-4 8-29-15z"/><path fill="url(#cgSteel)" d="M302 187l42-78 13-10 2 19-46 78z"/><path fill="#f0dbac" stroke="none" d="M344 109l-38 76 4 2 43-78 1-7z"/><path fill="#473226" d="M295 197l-10 18-7-4 10-18z"/></g><g fill="#f3b977"><rect x="73" y="154" width="2" height="2"/><rect x="398" y="192" width="3" height="3"/><rect x="310" y="156" width="2" height="2"/><rect x="112" y="211" width="2" height="2"/><rect x="371" y="240" width="2" height="2"/></g></svg><div class="crypt-brand"><div class="crypt-kicker">LES PROFONDEURS OUBLIÉES</div><h1>CRYPTGRAVE</h1><div class="crypt-rule"></div></div></div><div class="crypt-content"><p class="crypt-intro">Descends. Combats. Survis.</p><div class="crypt-actions">${resume?'<button class="wide" id="resume">Reprendre la partie</button>':''}<button class="wide" id="startHistory">Panthéon et records</button><button class="wide" id="startopts">Options graphiques</button><button class="wide" id="startTransfer" style="grid-column:1/-1">Transfert de sauvegarde</button></div><h2>Nouvelle partie</h2><div class="classes">${Object.entries(CLASSES).map(([k,c])=>classCard(k,c)).join('')}</div><p class="crypt-foot">1.0.0 RC1 · Mort permanente · Une nouvelle partie remplace la sauvegarde active.</p></div></section>`);document.getElementById('startopts').onclick=()=>options(startMenu);document.getElementById('startTransfer').onclick=transferMenu;document.getElementById('startHistory').onclick=()=>historyMenu(startMenu);panel.querySelectorAll('[data-class]').forEach(b=>b.onclick=()=>newGame(b.dataset.class));if(resume)document.getElementById('resume').onclick=()=>{if(restore()){mode='game';hide();say('Partie reprise.');update()}else recoveryMenu()}}
-// TECH-012A — Crée l'état initial à partir de la classe choisie, initialise les champs compatibles avec les sauvegardes, génère le premier étage et enregistre la partie.
+/* TECH-012A — Crée l'état initial à partir de la classe choisie, initialise les champs compatibles avec les sauvegardes, génère le premier étage et enregistre la partie. */
 function newGame(id){let c=CLASSES[id];S={classId:id,x:0,y:0,hp:c.hp,maxHp:c.hp,res:c.maxRes,maxRes:c.maxRes,level:1,xp:0,points:0,floor:1,turn:0,bandages:3,atk:0,armor:0,guard:0,boost:0,cool:[0,0,0],kills:0,dead:false};migrate();selected=null;generate();mode='game';hide();say('Un nouveau destin commence · '+currentBiome().name+'.');update();save()}
 // GAME-006B: biome-specific species, independent deterministic stream.
 const BESTIARY={
@@ -932,7 +932,7 @@ function merchantStock(floor,seed,merchantId){
  stock.push({kind:'bandage',price:5+Math.floor(depth/5),qty:2});
  return stock;
 }
-// TECH-012C — Place un marchand tous les trois étages à partir du deuxième, près du départ, sans occuper les positions déjà réservées.
+/* TECH-012C — Place un marchand tous les trois étages à partir du deuxième, près du départ, sans occuper les positions déjà réservées. */
 function buildMerchant(d,decorated,terrain,loot,all,floor,W,H){
  if(floor<2||floor>30||(floor-2)%3!==0)return null;
  const used=new Set([d.start,d.stairs,...all,...loot,...decorated.features,...terrain].map(p=>p.y*W+p.x)),candidates=[];
@@ -956,7 +956,7 @@ function canBuy(f,index){
  if(a.kind==='consumable')return Object.hasOwn(CONSUMABLES,a.id)&&pouchCount(a.id)<POUCH_CAP;
  return a.kind==='bandage';
 }
-// TECH-012C — Vérifie l'achat, ajoute la marchandise, débite l'or et réduit le stock. Un équipement acheté reçoit un nouvel identifiant.
+/* TECH-012C — Vérifie l'achat, ajoute la marchandise, débite l'or et réduit le stock. Un équipement acheté reçoit un nouvel identifiant. */
 function buyMerchant(f,index){
  if(!canBuy(f,index))return false;
  const a=f.stock[index];
@@ -970,7 +970,7 @@ function canSell(f,id){
  const it=S.bag.find(v=>v.id===id);
  return !!it&&!it.bossRelic&&goldBalance()+salePrice(it)<=GOLD_CAP;
 }
-// TECH-012C — Vend uniquement un objet admissible du sac, le retire et crédite son prix de revente.
+/* TECH-012C — Vend uniquement un objet admissible du sac, le retire et crédite son prix de revente. */
 function sellMerchant(f,id){
  if(!canSell(f,id))return false;
  const i=S.bag.findIndex(v=>v.id===id),it=S.bag[i],price=salePrice(it);
@@ -998,7 +998,7 @@ const SPECIAL_ROOMS={
  hiddenArchive:{name:'Archives scellées',color:'#a7b4df',min:8,secret:true,desc:'Derrière les murs, les dernières chroniques du royaume.',choices:[['archiveStudy','Gagner 20 + 2 × étage XP.'],['archiveScroll','Prendre un parchemin de détection et un de protection.']]},
  hiddenTreasury:{name:'Trésor des disparus',color:'#d5b780',min:12,secret:true,desc:'Les bijoux des disparus reposent dans une chambre oubliée.',choices:[['treasuryGold','Prendre 25 + 2 × étage or.'],['treasuryGear','Prendre un équipement épique ou mieux.']]}
 };
-// TECH-012C — Génère des salles spéciales dans les étages admissibles à partir d'un flux pseudo-aléatoire local ; exclut les positions déjà occupées.
+/* TECH-012C — Génère des salles spéciales dans les étages admissibles à partir d'un flux pseudo-aléatoire local ; exclut les positions déjà occupées. */
 function buildSpecialRooms(d,decorated,terrain,loot,all,floor,W,H){
  if(floor<4||floor>30)return [];
  let n=(d.seed^Math.imul(floor,0x9e3779b1)^0xb2c137ad)>>>0;n=Math.imul(n^(n>>>16),0x7feb352d);n=Math.imul(n^(n>>>15),0x846ca68b);n=(n^(n>>>16))>>>0;
@@ -1047,7 +1047,7 @@ function specialRoomAllowed(f,choice){
  if(choice==='treasuryGear')return S.bag.length<24;
  return false;
 }
-// TECH-012C — Valide le choix, marque la salle comme utilisée et applique sa récompense. La salle conserve le choix effectué.
+/* TECH-012C — Valide le choix, marque la salle comme utilisée et applique sa récompense. La salle conserve le choix effectué. */
 function resolveSpecialRoom(f,choice){
  if(!specialRoomAllowed(f,choice))return false;
  const floor=Math.max(1,Math.min(30,S.floor));
@@ -1083,7 +1083,7 @@ function drawSpecialRoom(f,px,py,visible){
  else{ctx.fillRect(px+7,py+2,2,5);ctx.fillRect(px+5,py+4,6,2)}
  if(!f.spent&&visible){ctx.fillStyle='#f7e7bc';ctx.fillRect(px+7,py+7,2,2)}
 }
-// TECH-012A — Construit un donjon à partir de ses dimensions, de sa profondeur et d'une graine. Le flux pseudo-aléatoire local sépare cette génération des tirages du combat.
+/* TECH-012A — Construit un donjon à partir de ses dimensions, de sa profondeur et d'une graine. Le flux pseudo-aléatoire local sépare cette génération des tirages du combat. */
 function buildDungeon(W,H,floor,seed){
   // Local deterministic PRNG: combat RNG remains independent.
   let state=seed>>>0;
@@ -1165,9 +1165,9 @@ function buildDungeon(W,H,floor,seed){
   }
   return {map,start,stairs,monsters,loot,rooms,seed:seed>>>0,profile:p.id,shortcuts};
 }
-// TECH-012A — Orchestre la création d'un étage : plan, décoration, secrets, terrain, population et butin. Replace le joueur au départ et initialise les cases découvertes.
+/* TECH-012A — Orchestre la création d'un étage : plan, décoration, secrets, terrain, population et butin. Replace le joueur au départ et initialise les cases découvertes. */
 function generate(){clearCombatFx();const seed=Math.floor(Math.random()*4294967296)>>>0;const d=buildDungeon(W,H,S.floor,seed);const decorated=decorateDungeon(d,W,H,S.floor);addDeepSecret(d,decorated,W,H,S.floor);map=decorated.map;features=decorated.features;const biome=biomeForFloor(S.floor,d.seed);terrain=buildTerrain(d,decorated,W,H,S.floor,biome);seen=Array(W*H).fill(0);S.x=d.start.x;S.y=d.start.y;stairs=d.stairs;monsters=selectBossVariant(balanceEnemies(promoteEnemies(d.monsters,S.floor,seed,stairs),S.floor),S.floor,seed);loot=addSupplies(d,decorated,terrain);for(const l of loot)if(l.kind==='gear')l.item=item();loot.push(...placeConsumable(d,decorated,terrain,loot,S.floor));const exploration=buildExploration(d,decorated,terrain,loot,monsters,S.floor);features.push(...exploration.events);if(exploration.rare){const rare=exploration.rare;monsters=monsters.map(m=>m.x===rare.x&&m.y===rare.y?rare:m)}monsters=populateBestiary(monsters,biome,S.floor,d.seed);const merchant=buildMerchant(d,decorated,terrain,loot,monsters,S.floor,W,H);if(merchant)features.push(merchant);for(const room of buildSpecialRooms(d,decorated,terrain,loot,monsters,S.floor,W,H)){if(room.secret){const i=features.findIndex(f=>f.type==='chest'&&f.secret&&f.x===room.x&&f.y===room.y);if(i>=0)features.splice(i,1,room)}else features.push(room)}S.healUses=0;S.dungeon={version:1,seed:d.seed,profile:d.profile,biome};reveal()}
-// TECH-012C — Copie la grille de base et ajoute les éléments interactifs en évitant les positions réservées. La graine dérivée garde les tirages séparés de la génération initiale.
+/* TECH-012C — Copie la grille de base et ajoute les éléments interactifs en évitant les positions réservées. La graine dérivée garde les tirages séparés de la génération initiale. */
 function decorateDungeon(d,W,H,floor){
   let s=(d.seed^0x43ac91d7)>>>0;
   const rnd=n=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return Math.floor(s/4294967296*n)};
@@ -1208,7 +1208,7 @@ function searchNearby(){
   }
   if(!found&&!disarmed)say('Tu attends et fouilles les environs.');
 }
-// TECH-012C — Traite les interactions avec les éléments du donjon, notamment portes, passages secrets et coffres ; une porte ouverte devient praticable dans map.
+/* TECH-012C — Traite les interactions avec les éléments du donjon, notamment portes, passages secrets et coffres ; une porte ouverte devient praticable dans map. */
 function interactFeature(f){
   if(!f)return false;
   if((f.type==='door'||f.type==='secret')&&!f.open&&(f.type!=='secret'||f.found)){
@@ -1221,7 +1221,7 @@ function interactFeature(f){
   }
   return false;
 }
-// TECH-012C — Révèle et désactive définitivement le piège déclenché, retire les PV et lance la fin de partie si les dégâts sont mortels.
+/* TECH-012C — Révèle et désactive définitivement le piège déclenché, retire les PV et lance la fin de partie si les dégâts sont mortels. */
 function triggerTrap(x,y){
   const f=featureAt(x,y);if(!f||f.type!=='trap'||f.spent)return;
   f.found=true;f.spent=true;S.hp=Math.max(0,S.hp-f.damage);say('Piège déclenché : -'+f.damage+' PV.');if(S.hp===0)die();
@@ -1318,7 +1318,7 @@ function biomeForFloor(floor,seed){
   if(n%100>=35)return original;
   return floor<=12?'fungal':floor<=24?'frozen':'abyss';
 }
-// TECH-012A — Ajoute le terrain propre au biome sur les cases admissibles. Les positions réservées aux éléments du donjon et aux entités sont exclues.
+/* TECH-012A — Ajoute le terrain propre au biome sur les cases admissibles. Les positions réservées aux éléments du donjon et aux entités sont exclues. */
 function buildTerrain(d,decorated,W,H,floor,chosenBiome){
   const biome=chosenBiome||biomeForFloor(floor),terrain=[],map=decorated.map;
   if(biome==='crypt')return terrain;
@@ -1464,7 +1464,7 @@ function drawBiomeTile(b,x,y,wall,visible,px,py){
  const ops=tileArt(b,wall,visible,variant,edges);
  for(const [color,dx,dy,w,h] of ops){ctx.fillStyle=color;ctx.fillRect(px+dx,py+dy,w,h)}
 }
-// TECH-012A — Teste la ligne de vue entre le joueur et une case, dans un rayon de 10 cases. Les obstacles intermédiaires et les angles fermés interrompent la visibilité.
+/* TECH-012A — Teste la ligne de vue entre le joueur et une case, dans un rayon de 10 cases. Les obstacles intermédiaires et les angles fermés interrompent la visibilité. */
 function los(x,y){
   const dx=x-S.x,dy=y-S.y;if(!inside(x,y)||dx*dx+dy*dy>100)return false;
   const n=Math.max(Math.abs(dx),Math.abs(dy));let px=S.x,py=S.y;
@@ -1474,13 +1474,13 @@ function los(x,y){
   }return true;
 }
 // GAME-011C3: only cells within the existing LOS radius can be revealed.
-// TECH-012A — Marque comme découvertes les cases actuellement visibles dans le voisinage du joueur. Les anciennes découvertes restent mémorisées.
+/* TECH-012A — Marque comme découvertes les cases actuellement visibles dans le voisinage du joueur. Les anciennes découvertes restent mémorisées. */
 function reveal(){
  const minX=Math.max(0,Math.ceil(S.x-10)),maxX=Math.min(W-1,Math.floor(S.x+10));
  const minY=Math.max(0,Math.ceil(S.y-10)),maxY=Math.min(H-1,Math.floor(S.y+10));
  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(los(x,y))seen[idx(x,y)]=1;
 }
-// TECH-012A — Vérifie que la destination est praticable. En diagonale, les deux cases orthogonales doivent aussi être libres pour interdire le passage à travers un angle fermé.
+/* TECH-012A — Vérifie que la destination est praticable. En diagonale, les deux cases orthogonales doivent aussi être libres pour interdire le passage à travers un angle fermé. */
 function stepOK(x,y,fx,fy){
   if(!clear(x,y))return false;
   let dx=x-fx,dy=y-fy;
@@ -1513,7 +1513,7 @@ function addSupplies(d,decorated,terrain){
 }
 function healingLeft(){return Math.max(0,3-(S.healUses||0))}
 function bandageValue(level){return 9+Math.floor(Math.max(0,Math.min(30,level)-1)/5)}
-// TECH-012A — Convertit l'expérience en niveaux et attribue les gains correspondants. Plusieurs niveaux peuvent être obtenus en une seule récompense, sans dépasser le niveau 30.
+/* TECH-012A — Convertit l'expérience en niveaux et attribue les gains correspondants. Plusieurs niveaux peuvent être obtenus en une seule récompense, sans dépasser le niveau 30. */
 function gainXP(n){
   if(S.level>=30){
     S.xp=0;
@@ -1581,9 +1581,9 @@ function bossReward(m){
 }
 function eliteReward(){return item(2)}
 function kill(m){if(!monsters.includes(m))return;monsters=monsters.filter(x=>x!==m);S.gold=Math.min(GOLD_CAP,goldBalance()+goldReward(m,S.floor));S.kills++;gainXP(enemyXP(m,S.floor));if(m.boss)loot.unshift({x:m.x,y:m.y,kind:'gear',item:Object.hasOwn(EXTENDED_BOSSES,m.boss)?extendedBossReward(m):bossReward(m)});else if(m.rare){loot.push({x:m.x,y:m.y,kind:'gear',item:createGear(++S.serial,S.floor,4)},{x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)})}else if(m.affix)loot.push({x:m.x,y:m.y,kind:'gear',item:eliteReward()});else if(rand(5)===0){const gear=rand(3)===0;loot.push({x:m.x,y:m.y,kind:gear?'gear':'bandage',...(gear?{item:item()}: {})})}if(!m.boss&&!m.affix&&rand(12)===0)loot.push({x:m.x,y:m.y,kind:'consumable',consumable:rollConsumable(S.floor)});say(m.kind+' vaincu !')}
-// TECH-012A — Résout l'attaque du joueur contre un ennemi : critique, dégâts, effets de talent, retour visuel et traitement de la mort si les PV tombent à zéro.
+/* TECH-012A — Résout l'attaque du joueur contre un ennemi : critique, dégâts, effets de talent, retour visuel et traitement de la mort si les PV tombent à zéro. */
 function hit(m,damage,profile=null){const critical=rand(100)<criticalChance(profile),d=outgoingDamage(m,damage,profile,critical);if(critical&&talentBonus('bleed'))m.bleed=Math.max(m.bleed||0,talentBonus('bleed'));m.hp-=d;S.boost=0;if(los(m.x,m.y))combatFx(critical?'critical':'hit',d);say(m.kind+' : -'+d+' PV');if(m.hp<=0)kill(m)}
-// TECH-012A — Évalue les actions tactiques d'un ennemi à partir de son rôle, de la carte et des acteurs. Les déplacements candidats doivent respecter les obstacles et l'occupation des cases.
+/* TECH-012A — Évalue les actions tactiques d'un ennemi à partir de son rôle, de la carte et des acteurs. Les déplacements candidats doivent respecter les obstacles et l'occupation des cases. */
 function tacticalTurn(m,player,all,board,contacts){
   const {W,H,stepOK}=board,dist=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),key=p=>p.y*W+p.x;
   const same=(a,b)=>a.x===b.x&&a.y===b.y;
@@ -1666,7 +1666,7 @@ function aiEscapeCells(player,all,board,extra=[],moving=null,dest=null){
  const threats=[...aiThreatCells(all),...extra];
  return aiNeighbors(player,board).filter(p=>!all.some(m=>m.hp>0&&aiSame(m===moving?dest:m,p))&&!threats.some(t=>aiSame(t,p)));
 }
-// TECH-012C — Vérifie les intentions d'attaque annoncées et les possibilités de fuite restantes avant d'adapter la zone menacée.
+/* TECH-012C — Vérifie les intentions d'attaque annoncées et les possibilités de fuite restantes avant d'adapter la zone menacée. */
 function prepareCoordinatedIntent(m,player,all,board){
  if(!m.intent)return true;
  const intent=m.intent,prior=intent.cells.slice(),others=aiThreatCells(all,m);
@@ -1683,7 +1683,7 @@ function prepareCoordinatedIntent(m,player,all,board){
  }
  intent.cells=cells;return true;
 }
-// TECH-012C — Ajuste les déplacements tactiques en fonction des menaces coordonnées. La formation ne doit pas servir à suivre un joueur caché ni fermer sa dernière issue sûre.
+/* TECH-012C — Ajuste les déplacements tactiques en fonction des menaces coordonnées. La formation ne doit pas servir à suivre un joueur caché ni fermer sa dernière issue sûre. */
 function coordinatedAction(m,player,all,board,contacts,base){
  if(m.stun||base.type!=='move')return base;
  const d=dist(m,player),family=aiFamily(m),visible=d<=8&&aiLine(m,player,board);
@@ -1721,7 +1721,7 @@ function coordinatedAction(m,player,all,board,contacts,base){
  }
  return base;
 }
-// TECH-012A — Joue la phase des ennemis après une action du joueur. Traite les états temporaires et interrompt la boucle si le personnage meurt.
+/* TECH-012A — Joue la phase des ennemis après une action du joueur. Traite les états temporaires et interrompt la boucle si le personnage meurt. */
 function enemyPhase(){
   const contacts=monsters.filter(m=>{
     if(m.hp<=0||m.stun>0||dist(m,S)>8)return false;
@@ -1745,7 +1745,7 @@ function enemyPhase(){
     else if(action.type==='aim'&&los(m.x,m.y))say(m.kind+' te vise ! Déplace-toi.');
   }
 }
-// TECH-012A — Clôt un tour consommé : avance le compteur, joue la phase ennemie puis actualise les états, la ressource, la visibilité, l'affichage et la sauvegarde si le joueur survit.
+/* TECH-012A — Clôt un tour consommé : avance le compteur, joue la phase ennemie puis actualise les états, la ressource, la visibilité, l'affichage et la sauvegarde si le joueur survit. */
 function finish(rangedWeapon=false,offensiveSkill=false){
   S.turn++;
   enemyPhase();
@@ -1759,9 +1759,9 @@ function finish(rangedWeapon=false,offensiveSkill=false){
   update();
   save()
 }
-// TECH-012A — Délègue la mort permanente à la procédure commune de fin de partie.
+/* TECH-012A — Délègue la mort permanente à la procédure commune de fin de partie. */
 function die(){endRun('death')}
-// TECH-012A — Ramasse les objets présents sur la case. Les objets qui ne tiennent pas dans le sac ou la sacoche restent au sol.
+/* TECH-012A — Ramasse les objets présents sur la case. Les objets qui ne tiennent pas dans le sac ou la sacoche restent au sol. */
 function collectLoot(x,y){
   let full=false;
   for(const found of loot.filter(l=>l.x===x&&l.y===y)){
@@ -1773,11 +1773,11 @@ function collectLoot(x,y){
   }
   if(full)say('Sac ou sacoche pleine : butin laissé au sol.');
 }
-// TECH-012A — Interprète une commande du pavé selon le contexte : ciblage de compétence, interaction, déplacement ou combat. Une fenêtre ouverte bloque les déplacements.
+/* TECH-012A — Interprète une commande du pavé selon le contexte : ciblage de compétence, interaction, déplacement ou combat. Une fenêtre ouverte bloque les déplacements. */
 function move(dx,dy){if(mode!=='game'||!overlay.classList.contains('hidden'))return;if(selected!==null){if(selected==='weapon')useWeaponDirection(dx,dy);else useDirection(dx,dy);return}let x=S.x+dx,y=S.y+dy;const f=featureAt(x,y);const legalAngle=!dx||!dy||clear(S.x+dx,S.y)&&clear(S.x,S.y+dy);if(legalAngle&&!mob(x,y)&&f?.type==='merchant'&&stepOK(x,y,S.x,S.y)){merchantMenu(f);return}if(legalAngle&&!mob(x,y)&&f?.type==='specialRoom'&&!f.spent&&stepOK(x,y,S.x,S.y)){specialRoomMenu(f);return}if(legalAngle&&!mob(x,y)&&f?.type==='event'&&!f.spent&&stepOK(x,y,S.x,S.y)){explorationMenu(f);return}if(legalAngle&&!mob(x,y)&&interactFeature(f)){finish();return}if(!stepOK(x,y,S.x,S.y)){say('Passage ou angle bloqué.');return}let m=mob(x,y);if(m){hit(m,2+rand(3),basicProfile(m));finish();return}S.x=x;S.y=y;triggerTrap(x,y);if(S.dead)return;enterTerrain(x,y);if(S.dead)return;collectLoot(x,y);if(x===stairs.x&&y===stairs.y){if(monsters.some(m=>m.boss&&m.hp>0)){say('Le boss doit être vaincu avant de descendre.');finish();return}if(loot.some(l=>l.x===x&&l.y===y)){say('Butin sur les escaliers : libère de la place avant de descendre.');finish();return}if(S.floor>=FINAL_FLOOR){S.turn++;endRun('victory');return}S.floor++;const recovery=4+Math.floor(Math.min(30,S.floor-1)/6);const recovered=Math.min(recovery,S.maxHp-S.hp);S.hp+=recovered;S.res=S.maxRes;generate();say('Étage '+S.floor+' · '+currentBiome().name+' · +'+recovered+' PV.')}finish()}
-// TECH-012C — Convertit le bouton de barre rapide en indice de compétence ; vérifie son déblocage, sa recharge et son coût. Une compétence directionnelle attend une commande du pavé.
+/* TECH-012C — Convertit le bouton de barre rapide en indice de compétence ; vérifie son déblocage, sa recharge et son coût. Une compétence directionnelle attend une commande du pavé. */
 function activate(i){if(mode!=='game'||!overlay.classList.contains('hidden'))return;i=S.bar[i];if(!unlocked(i))return;let c=CLASSES[S.classId],sk=c.skills[i],cost=sk[1];if(S.cool[i]||S.res<cost){say('Compétence indisponible.');return}if(sk[3]==='direction'||sk[3]==='ranged'){selected=selected===i?null:i;say(selected===null?'Ciblage annulé.':'Choisis une direction sur le pavé.');update();return}if(sk[3]==='heal'&&!healingLeft()){say('Soins de compétence épuisés pour cet étage.');return}if(sk[3]==='heal'&&S.hp===S.maxHp){say('PV déjà au maximum.');return}selected=null;S.res-=cost;S.cool[i]=sk[2]+1;if(sk[3]==='heal'){S.healUses=(S.healUses||0)+1;let n=Math.min(7+S.level+talentBonus('heal')+synergyHeal()+2*(S.ranks[i]-1)+Math.floor(S.attrs[4]/3)+(i===4?5:0),S.maxHp-S.hp);S.hp+=n;if(i===4&&S.classId==='ranger')S.res=Math.min(S.maxRes,S.res+4);if(hasSynergy('reserve'))S.res=Math.min(S.maxRes,S.res+2);combatFx('heal',n);say('Soin : +'+n+' PV.')}else if(sk[3]==='guard'){S.guard=2+S.ranks[i]+(i===4?3:0)+talentBonus('guard')+synergyGuard();if(i===4&&S.classId==='rogue')S.veil=3;if(S.classId==='mage')S.shield=Math.max(S.shield,4+S.ranks[i]*2+(i===4?6:0)+talentBonus('shield')+synergyShield());combatFx('guard');say('Protection activée.')}else{S.boost=3+S.ranks[i];say('Prochaine attaque renforcée.')}finish()}
-// TECH-012A — Résout la compétence sélectionnée dans une direction et recherche les cibles admissibles. Vérifie les ressources et le temps de recharge avant de dépenser le coût.
+/* TECH-012A — Résout la compétence sélectionnée dans une direction et recherche les cibles admissibles. Vérifie les ressources et le temps de recharge avant de dépenser le coût. */
 function useDirection(dx,dy){let i=selected;selected=null;let sk=CLASSES[S.classId].skills[i],target=null,targets=[];if(!unlocked(i)||S.cool[i]||S.res<sk[1]){update();return}if(sk[3]==='direction'){let x=S.x+dx,y=S.y+dy;if(stepOK(x,y,S.x,S.y))target=mob(x,y)}else{for(let k=1;k<=5;k++){let x=S.x+dx*k,y=S.y+dy*k;if(!clear(x,y))break;if(!stepOK(x,y,x-dx,y-dy))break;let m=mob(x,y);if(m){targets.push(m);target??=m;if(!(i===3&&S.classId==='ranger'))break}}}if(!target){say('Aucune cible dans cette direction.');update();return}S.res-=sk[1];S.cool[i]=sk[2]+1;let damage=(sk[3]==='ranged'?5:6)+rand(3)+Math.floor(S.level/3)+2*(S.ranks[i]-1)+(i===3?4+(S.nodes.o2?2:0):0);if(S.classId==='rogue'&&i===3&&target.hp<=target.maxHp/2)damage+=5;hit(target,damage,{skill:true,ranged:sk[3]==='ranged',index:i});if(monsters.includes(target)){if(S.classId==='warrior'&&i===3)target.exposed=Math.max(target.exposed||0,synergyDuration('exposed',target));if(S.classId==='rogue')target.bleed=Math.max(target.bleed||0,synergyDuration('bleed',target));if(S.classId==='mage'&&i===3)target.stun=Math.max(target.stun||0,synergyDuration('stun',target))}if(S.classId==='ranger'&&i===3)for(const m of targets.slice(1))if(monsters.includes(m))hit(m,Math.max(1,Math.floor(damage/2)),{skill:true,ranged:true,index:i,secondary:true});finish(false,true)}
 function bandage(){if(mode!=='game'||!overlay.classList.contains('hidden')||S.bandages<1||S.hp===S.maxHp)return;selected=null;S.bandages--;let n=Math.min(bandageValue(S.level)+talentBonus('bandage'),S.maxHp-S.hp);S.hp+=n;combatFx('heal',n);say('Bandage : +'+n+' PV.');finish()}
 // GAME-007F: cosmetic HUD, pixel glyphs, transient combat feedback.
@@ -1806,7 +1806,7 @@ function updateHud(){
 const FX_LABELS={hit:'Frappe',critical:'Critique',hurt:'Dégâts',heal:'Soin',guard:'Protection'};
 function clearCombatFx(){document.getElementById('combatFx').innerHTML=''}
 function combatFx(kind,amount){if(!Object.hasOwn(FX_LABELS,kind)||!S||mode!=='game')return;const el=document.getElementById('combatFx'),n=Number.isFinite(amount)?Math.max(0,Math.round(amount)):null;el.innerHTML='<div class="fx-chip fx-'+kind+'">'+FX_LABELS[kind]+(n===null?'':(kind==='heal'?' +':' −')+n)+'</div>'}
-// TECH-012C — Synchronise les informations affichées, les commandes disponibles et le rendu avec l'état courant du personnage.
+/* TECH-012C — Synchronise les informations affichées, les commandes disponibles et le rendu avec l'état courant du personnage. */
 function update(){if(!S)return;updateHud();document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;weaponButton.classList.toggle('active',selected==='weapon');document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';document.querySelectorAll('[data-skill]').forEach(b=>{let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];setHudMarkup(b,skillIcon(S.classId,i)+'<span class="skill-caption">'+s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]+' t':'')+'</span><small class="skill-cost">Coût '+s[1]+'</small>');b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());b.classList.toggle('active',selected===i)});render()}
 // GAME-007B: native 16px silhouettes; gear layers are purely cosmetic.
 const PLAYER_ART={
@@ -1929,7 +1929,7 @@ function renderCellIndex(items){
  }
  return cells;
 }
-// TECH-012A — Dessine le voisinage du joueur dans le canvas à partir des cases connues. Les index de terrain et de features accélèrent la recherche des éléments par case.
+/* TECH-012A — Dessine le voisinage du joueur dans le canvas à partir des cases connues. Les index de terrain et de features accélèrent la recherche des éléments par case. */
 function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);
  const terrainCells=renderCellIndex(terrain),featureCells=renderCellIndex(features),intentCells=new Set();
  for(const m of monsters)if(m.intent)for(const p of m.intent.cells)if(Number.isInteger(p.x)&&Number.isInteger(p.y)&&inside(p.x,p.y))intentCells.add(idx(p.x,p.y));
@@ -1977,7 +1977,7 @@ function bagCards(){
  return '<div class="crypt-bag"><div class="bag-capacity"><span>Emplacements occupés</span><b>'+S.bag.length+'/24</b></div><div class="bag-capacity-track" role="progressbar" aria-label="Capacité du sac" aria-valuemin="0" aria-valuemax="24" aria-valuenow="'+S.bag.length+'"><span style="width:'+meterPercent(S.bag.length,24)+'%"></span></div>'+(S.bag.length?S.bag.map(bagItemCard).join(''):'<p class="bag-empty">Le sac est vide.</p>')+'</div>';
 }
 
-// TECH-012C — Construit l'écran de personnage, de progression et d'équipement à partir de l'état de la partie active.
+/* TECH-012C — Construit l'écran de personnage, de progression et d'équipement à partir de l'état de la partie active. */
 function inventory(){if(mode!=='game')return;selected=null;update();show(characterDossier()+'<div class="gear-quick"><button id="jump-equipment">Équipement</button><button id="jump-bag">Sac</button></div><h2>Caractéristiques ('+S.ap+' points)</h2><div class="classes sheet-attributes">'+ATTR.map(characterAttributeCard).join('')+'</div><h2>Talents ('+S.points+' points)</h2>'+CLASSES[S.classId].skills.map(characterRankCard).join('')+'<h2 id="equipment-heading">Équipement</h2><p>Attaque +'+(S.atk+bonus('atk'))+' · Défense +'+(S.armor+bonus('def'))+' · Critique +'+bonus('crit')+'% · Esquive +'+bonus('dodge')+'% · Régénération +'+bonus('regen')+'</p>'+combatSummary()+setSummary()+equipmentRack()+'<h2 id="bag-heading">Sac '+S.bag.length+'/24</h2>'+bagCards()+'<button class="wide" id="close">Retour au donjon</button>');const spec=document.createElement('section');spec.innerHTML='<h2>Spécialisation</h2>'+(S.spec?'<p>'+SPECS[S.classId][S.spec==='offense'?0:1]+'</p><p>'+doctrineDescription(S.classId,S.spec)+'</p>':S.level<5?'<p>Débloquée au niveau 5.</p>':'<div class="classes"><button data-spec="offense">'+SPECS[S.classId][0]+'<small>+2 dégâts · '+doctrineDescription(S.classId,'offense')+'</small></button><button data-spec="defense">'+SPECS[S.classId][1]+'<small>+1 défense, +5% esquive · '+doctrineDescription(S.classId,'defense')+'</small></button></div>');panel.querySelector('h2').before(spec);const refresh=()=>{save();update();inventory()};const styles=document.createElement('section');styles.innerHTML='<h2>Style de combat</h2><p>Style actuel : '+currentStyle().name+'</p><div class="classes">'+Object.entries(STYLES).map(([key,v])=>'<button data-style="'+key+'" '+(v===currentStyle()?'disabled':'')+'>'+v.name+'<small>'+v.desc+'</small></button>').join('')+'</div>';panel.querySelector('h2').before(styles);styles.querySelectorAll('[data-style]').forEach(b=>b.onclick=()=>{const key=b.dataset.style;if(Object.hasOwn(STYLES,key)){S.combatStyle=key;refresh()}});const tree=document.createElement('section');const names={warrior:['Force brute','Fureur','Armure renforcée','Réflexes','Maître d’armes'],rogue:['Lame affûtée','Précision mortelle','Souplesse','Pas furtif','Maître des ombres'],ranger:['Flèche lourde','Œil de lynx','Peau dure','Instinct','Maître pisteur'],mage:['Puissance arcanique','Surcharge','Peau de pierre','Voile','Maître des arcanes']}[S.classId];const nodes=[['o1',2,[], '+1 dégât'],['o2',5,['o1'],'+8% critique'],['d1',2,[],'+1 défense'],['d2',5,['d1'],'+5% esquive'],['master',10,['o2','d2'],'+2 dégâts, +1 régénération']];const eligible=n=>S.points>0&&!S.nodes[n[0]]&&S.level>=n[1]&&n[2].every(k=>S.nodes[k]);tree.innerHTML='<h2>Arbre de talents passifs</h2><p>Chaque talent coûte 1 point. Maîtrise : les deux branches avancées requises.</p><div class="classes">'+nodes.map((n,i)=>'<button data-node="'+i+'" '+(eligible(n)?'':'disabled')+'>'+names[i]+'<small>'+n[3]+' · Niv. '+n[1]+(S.nodes[n[0]]?' · acquis':n[2].length?' · prérequis : '+n[2].map(k=>names[nodes.findIndex(x=>x[0]===k)]).join(', '):'')+'</small></button>').join('')+'</div>';panel.querySelector('[data-rank]').before(tree);const advanced=advancedTalentUI(refresh);tree.after(advanced);advanced.after(synergyTalentUI(refresh));const active=document.createElement('section');const canLearn=i=>!unlocked(i)&&S.points>0&&S.level>= (i===3?5:8)&&S.nodes[i===3?'o1':'d1'];active.innerHTML='<h2>Compétences avancées</h2>'+[3,4].map(i=>'<button class="wide" data-learn="'+i+'" '+(canLearn(i)?'':'disabled')+'>'+CLASSES[S.classId].skills[i][0]+' · '+(unlocked(i)?'acquis':'1 point · niveau '+(i===3?5:8)+' · branche '+(i===3?'offensive':'défensive'))+'</button>').join('')+'<h2>Barre de compétences</h2>'+S.bar.map((v,j)=>'<label>Emplacement '+(j+1)+'</label><select data-bar="'+j+'">'+CLASSES[S.classId].skills.map((sk,i)=>unlocked(i)?'<option value="'+i+'" '+(v===i?'selected':'')+'>'+sk[0]+'</option>':'').join('')+'</select>').join('');tree.before(active);active.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{let i=+b.dataset.learn;if(canLearn(i)){S.points--;S.activeTalents[i]=true;refresh()}});active.querySelectorAll('[data-bar]').forEach(b=>b.onchange=()=>{let j=+b.dataset.bar,i=+b.value;if(!unlocked(i))return;let other=S.bar.indexOf(i);if(other>=0)S.bar[other]=S.bar[j];S.bar[j]=i;refresh()});tree.querySelectorAll('[data-node]').forEach(b=>b.onclick=()=>{let n=nodes[+b.dataset.node];if(eligible(n)){S.points--;S.nodes[n[0]]=true;refresh()}});panel.querySelectorAll('[data-spec]').forEach(b=>b.onclick=()=>{if(S.level>=5&&!S.spec&&confirm('Choisir définitivement cette spécialisation ?')){S.spec=b.dataset.spec;refresh()}});panel.querySelectorAll('[data-attr]').forEach(b=>b.onclick=()=>{if(!S.ap)return;let i=+b.dataset.attr;S.ap--;S.attrs[i]++;if(i===2){S.maxHp+=2;S.hp+=2}if(i===3){S.maxRes++;S.res++}refresh()});panel.querySelectorAll('[data-rank]').forEach(b=>b.onclick=()=>{let i=+b.dataset.rank;if(!unlocked(i)||!S.points||S.ranks[i]>=5||S.level<S.ranks[i]*2)return;S.points--;S.ranks[i]++;refresh()});panel.querySelectorAll('[data-equip]').forEach(b=>b.onclick=()=>{let i=S.bag.findIndex(it=>it.id===+b.dataset.equip);if(i<0)return;let it=S.bag.splice(i,1)[0];if(S.equip[it.slot])S.bag.push(S.equip[it.slot]);S.equip[it.slot]=it;refresh()});panel.querySelectorAll('[data-off]').forEach(b=>b.onclick=()=>{let k=b.dataset.off;if(S.equip[k]&&S.bag.length<24){S.bag.push(S.equip[k]);S.equip[k]=null;refresh()}});panel.querySelectorAll('[data-drop]').forEach(b=>b.onclick=()=>{if(confirm('Jeter cet objet ?')){S.bag=S.bag.filter(it=>it.id!==+b.dataset.drop);refresh()}});document.getElementById('jump-equipment').onclick=()=>document.getElementById('equipment-heading').scrollIntoView({block:'start'});document.getElementById('jump-bag').onclick=()=>document.getElementById('bag-heading').scrollIntoView({block:'start'});document.getElementById('close').onclick=hide}
 function menu(){if(mode!=='game')return;selected=null;update();show(`<h1>Pause</h1><p>Partie sauvegardée automatiquement sur cet appareil. Une mort supprime la sauvegarde.</p><button class="wide" id="back">Continuer</button><button class="wide" id="pauseopts">Options graphiques</button><button class="wide" id="reset">Abandonner et recommencer</button>`);document.getElementById('back').onclick=hide;document.getElementById('pauseopts').onclick=()=>options(menu);document.getElementById('reset').onclick=()=>{if(confirm('Abandonner définitivement cette partie ?'))endRun('abandoned')}}
 document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();let [dx,dy]=b.dataset.d.split(',').map(Number);move(dx,dy)}));document.getElementById('wait').addEventListener('pointerdown',e=>{e.preventDefault();if(mode==='game'&&overlay.classList.contains('hidden')){selected=null;searchNearby();finish()}});document.querySelectorAll('[data-skill]').forEach(b=>b.addEventListener('click',()=>activate(+b.dataset.skill)));document.getElementById('consumables').onclick=consumablesMenu;document.getElementById('weaponAction').onclick=aimWeapon;document.getElementById('bandage').onclick=bandage;document.getElementById('inventory').onclick=inventory;document.getElementById('menu').onclick=menu;document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});startMenu();applyPrefs();window.addEventListener("resize",applyPrefs);if(typeof ResizeObserver!=="undefined")new ResizeObserver(resizeMap).observe(canvas.parentElement);
