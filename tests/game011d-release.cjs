@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
+const root=path.join(__dirname,'..'),m=require('../release.json');
+assert.equal(m.name,'CRYPTGRAVE');assert.equal(m.applicationId,'com.mathiks.cryptgrave');
+assert.equal(m.previewSuffix,'.v1preview');assert.equal(m.saveFormat,'cryptgrave-transfer-v1');
+assert.equal(m.pwaScope,'./');assert.ok(Number.isInteger(m.versionCode)&&m.versionCode>3);
+assert.ok(['rc','stable'].includes(m.stage));assert.match(m.version,/^1\.0\.0(?:-rc[1-9][0-9]*)?$/);
+assert.equal(m.stage==='rc',m.version.includes('-rc'));
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+assert.ok(html.includes(m.displayVersion+' · Mort permanente'));
+for(const key of ['rogue-android-game002-v1','rogue-android-display-v1','rogue-android-history-v1',m.saveFormat])assert.ok(html.includes(key));
+const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest'),'utf8'));assert.equal(manifest.id,'./');assert.equal(manifest.scope,m.pwaScope);assert.equal(manifest.start_url,'./');
+const guard=spawnSync(process.execPath,[path.join(root,'tools/package-release.cjs'),'--assert-publishable']);
+assert.equal(guard.status,m.stage==='stable'?0:1,'publication guard matches release stage');
+console.log('GAME-011D release metadata and publication guard OK: '+m.version);

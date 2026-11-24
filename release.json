@@ -1,0 +1,11 @@
+{
+  "name": "CRYPTGRAVE",
+  "version": "1.0.0-rc1",
+  "displayVersion": "1.0.0 RC1",
+  "versionCode": 4,
+  "stage": "rc",
+  "applicationId": "com.mathiks.cryptgrave",
+  "previewSuffix": ".v1preview",
+  "saveFormat": "cryptgrave-transfer-v1",
+  "pwaScope": "./"
+}
