@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify modular source assembly and extraction equivalence
+        run: |
+          node tools/build-game.cjs --check
+          node tests/tech013a.cjs
       - name: Verify release metadata and publication guard
         run: node tests/game011d-release.cjs
       - name: Run all engine suites
