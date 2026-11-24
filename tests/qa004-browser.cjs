@@ -31,12 +31,13 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.locator('#inventory').tap();assert.ok(await page.locator('#panel').isVisible());
     await page.locator('#close').tap();
     // GAME-005A: persisted legendary pieces, mobile inventory, and live set activation.
-    await page.evaluate(k=>{
+    const fixture1=await page.evaluate(k=>{
       const d=JSON.parse(localStorage.getItem(k));
       const gear=(slot,name)=>({id:++d.S.serial,slot,name,rarity:5,itemLevel:12,grade:2,atk:slot==='weapon'?3:0,def:slot==='armor'?3:1,crit:0,regen:0,dodge:0,affixes:[],setId:'bastion'});
       d.S.bag=[gear('weapon','Brise-rempart'),gear('armor','Cuirasse du Bastion'),gear('helmet','Heaume du Bastion')];
-      localStorage.setItem(k,JSON.stringify(d));
+      return d;
     },key);
+    await page.addInitScript(({key,data,marker})=>{if(!sessionStorage.getItem(marker)){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem(marker,'1')}},{key,data:fixture1,marker:'fixture-1'});
     await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
     assert.ok(await page.locator('.gear-detail').first().textContent().then(s=>s.includes('Légendaire')));
     const ids=(await read()).S.bag.map(i=>i.id);
