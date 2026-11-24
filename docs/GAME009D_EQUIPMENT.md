@@ -1,0 +1,5 @@
+# GAME-009D — Inventaire et équipement
+
+Silhouette équipée dynamique issue du sprite 16×16 original, cinq emplacements disposés autour du personnage (casque, anneau, arme, armure, bottes). Icônes d'objets existantes, couleurs et noms de rareté, bonus et effets d'ensemble conservés. Cartes du sac avec actions équiper/remplacer et jeter, indicateur de capacité 24 objets et raccourcis de navigation. Les détails des objets équipés restent consultables même lorsque le sac est plein.
+
+Aucune modification des handlers d'équipement, retrait, destruction, sauvegarde, ni des règles de combat. Comparaison du moteur et des handlers effectuée. Tests simulés réussis : 4 classes, 20 emplacements équipés, 20 cartes de sac, 5 raretés, sac plein/vide, échappement des noms et absence de mutation au rendu. Chromium : trois résolutions, navigation, équipement réel, capacité, silhouette et effets d'ensemble, captures dans l'artefact de prévisualisation. CI officielle et recette physique requises. Dépend de PR #36, validée en CI 4/4.

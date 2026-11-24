@@ -98,7 +98,26 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     await page.reload();await page.locator('#resume').tap();await page.locator('#inventory').tap();
     assert.ok(await page.locator('.gear-detail').first().textContent().then(s=>s.includes('Légendaire')));
     const ids=(await read()).S.bag.map(i=>i.id);
+    const equipmentSave=await read(),emptySprite=await page.locator('.equipment-sprite').innerHTML();
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      await page.locator('#jump-equipment').tap();
+      assert.equal(await page.locator('.gear-rack [data-off]').count(),5);
+      assert.equal(await page.locator('.gear-rack [data-off]:disabled').count(),5);
+      assert.ok(await page.locator('.gear-rack').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'equipment fits');
+      await page.locator('#jump-bag').tap();
+      assert.equal(await page.locator('.crypt-bag [data-equip]').count(),3);
+      assert.equal(await page.locator('.bag-capacity b').textContent(),'3/24');
+      assert.ok(await page.locator('.crypt-bag').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'bag fits');
+      if(process.env.ROGUE_ART_PREVIEW){await page.locator('.gear-rack').screenshot({path:'art-preview/equipment-empty-'+width+'x'+height+'.png'});await page.locator('.crypt-bag').screenshot({path:'art-preview/bag-'+width+'x'+height+'.png'})}
+      assert.deepEqual(await read(),equipmentSave);
+    }
+    await page.setViewportSize({width:393,height:851});
     for(const id of ids)await page.locator('[data-equip="'+id+'"]').tap();
+    assert.notEqual(await page.locator('.equipment-sprite').innerHTML(),emptySprite);
+    assert.equal(await page.locator('.gear-rack [data-off]:enabled').count(),3);
+    assert.equal(await page.locator('.bag-capacity b').textContent(),'0/24');
+    if(process.env.ROGUE_ART_PREVIEW)await page.locator('.gear-rack').screenshot({path:'art-preview/equipment-equipped-mobile.png'});
     assert.ok((await page.locator('#panel').textContent()).includes('Bastion de fer : 3/3'));
     assert.equal((await read()).S.equip.weapon.id,ids[0]);
     await page.locator('[data-off="helmet"]').tap();
