@@ -53,6 +53,48 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
      assert.deepEqual(await dest.evaluate(k=>JSON.parse(localStorage.getItem(k)),key),moved);
    }finally{await receiver.close()}
    assert.deepEqual(await read(),moved);
+   // GAME-011C5: a newer worker must wait for active clients, preserve the old
+   // shell offline, then activate without erasing any origin storage.
+   const oldWorker=fs.readFileSync(path.join(dir,'sw.js'),'utf8');
+   const oldCache=await page.evaluate(async()=> (await caches.keys()).find(n=>n.startsWith('rogue-pwa:/Rogue-Android/:')));
+   const oldHtml=fs.readFileSync(path.join(dir,'index.html'),'utf8');
+   fs.writeFileSync(path.join(dir,'index.html'),oldHtml.replace('</head>','<meta name="qa-cache-revision" content="next"></head>'));
+   const nextWorker=oldWorker.replace(/008c-[a-f0-9]{24}/,'008c-011c-test-update');
+   assert.notEqual(nextWorker,oldWorker);
+   fs.writeFileSync(path.join(dir,'sw.js'),nextWorker);
+   await page.evaluate(async()=>{const reg=await navigator.serviceWorker.ready;await reg.update()});
+   await page.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting,{},{timeout:30000});
+   assert.equal(await page.locator('meta[name=qa-cache-revision]').count(),0);
+   await context.setOffline(true);
+   await page.reload();assert.equal(await page.locator('meta[name=qa-cache-revision]').count(),0);
+   assert.deepEqual(await read(),moved);
+   await context.setOffline(false);
+   await page.close();
+   // Allow the browser to release the last controlled client before reopening.
+   // No skipWaiting or forced reload of an active game is used.
+   const deadline=Date.now()+30000;
+   let activated=false;
+   while(Date.now()<deadline&&!activated){
+     for(const worker of context.serviceWorkers()){
+       try{activated=await worker.evaluate(async old=>{const names=await caches.keys();return !names.includes(old)&&names.some(n=>n.endsWith('011c-test-update'))},oldCache);if(activated)break}catch{}
+     }
+     if(!activated)await new Promise(r=>setTimeout(r,100));
+   }
+   assert.ok(activated,'new cache activated after last game window closed');
+   const updated=await context.newPage();
+   updated.on('pageerror',e=>errors.push(e.message));
+   await updated.goto(url);
+   await updated.waitForFunction(async()=>{
+     const names=await caches.keys();return !names.some(n=>n.startsWith('rogue-pwa:/Rogue-Android/:')&&!n.endsWith('011c-test-update'))&&names.some(n=>n.endsWith('011c-test-update'))&&!!navigator.serviceWorker.controller;
+   },{},{timeout:30000});
+   await updated.reload();
+   assert.equal(await updated.locator('meta[name=qa-cache-revision]').getAttribute('content'),'next');
+   assert.deepEqual(await updated.evaluate(k=>JSON.parse(localStorage.getItem(k)),key),moved);
+   assert.equal(await updated.evaluate(()=>localStorage.getItem('rogov-web-v1')),'sibling sentinel');
+   assert.ok(await updated.evaluate(async old=>{const names=await caches.keys();return !names.includes(old)&&names.includes('rogov-test-sibling-cache')},oldCache));
+   await context.setOffline(true);await updated.reload();await updated.locator('#resume').tap();
+   assert.deepEqual(await updated.evaluate(k=>JSON.parse(localStorage.getItem(k)),key),moved);
+   await context.setOffline(false);
    assert.deepEqual(errors,[]);
    console.log('PWA: PNG sizes, scope, offline reload, real gameplay, save and sibling isolation passed');
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));fs.rmSync(dir,{recursive:true,force:true})}
