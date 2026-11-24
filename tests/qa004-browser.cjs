@@ -166,6 +166,17 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
     d=await read();await page.reload();await page.locator('#resume').tap();assert.equal((await read()).S.turn,d.S.turn);
     await page.setViewportSize({width:851,height:393});
     assert.ok(await page.locator('[data-d]').evaluateAll(a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=30&&r.height>=30&&r.x>=0&&r.y>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})));
+    // GAME-006F: final exit, history persists independently, new game remains available.
+    await page.setViewportSize({width:393,height:851});
+    const fixture12=await page.evaluate(k=>{const d=JSON.parse(localStorage.getItem(k));d.S.x=6;d.S.y=6;d.S.floor=30;d.S.hp=30;d.S.maxHp=50;d.S.turn=150;d.S.kills=20;d.monsters=[];d.terrain=[];d.loot=[];d.features=[];d.stairs={x:7,y:6};for(let y=4;y<=10;y++)for(let x=4;x<=10;x++)d.map[y*48+x]=0;return d},key);
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('fixture-12')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('fixture-12','1')}},{key,data:fixture12});
+    await page.reload();await page.locator('#resume').tap();await page.locator('[data-d="1,0"]').tap();
+    assert.equal(await read(),null);assert.ok((await page.locator('#panel').textContent()).includes('Victoire'));
+    await page.locator('#endHistory').tap();assert.ok((await page.locator('#panel').textContent()).includes('Panthéon des aventuriers'));
+    const records=await page.evaluate(()=>JSON.parse(localStorage.getItem('rogue-android-history-v1')));assert.equal(records.wins,1);assert.equal(records.fastestWin,151);
+    await page.reload();assert.equal(await page.locator('#resume').count(),0);await page.locator('#startHistory').tap();
+    assert.ok((await page.locator('#panel').textContent()).includes('Victoires : 1'));await page.locator('#historyBack').tap();
+    await page.locator('[data-class="rogue"]').tap();assert.equal((await read()).S.floor,1);assert.equal((await read()).S.classId,'rogue');
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});
