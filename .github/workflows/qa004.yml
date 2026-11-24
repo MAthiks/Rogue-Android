@@ -57,6 +57,8 @@ jobs:
         run: node tests/game010e.cjs
       - name: Verify unreadable save recovery
         run: node tests/game011a.cjs
+      - name: Verify continuous campaign and transition stress
+        run: node tests/game011b.cjs
       - name: Verify transfers from published 0.10.0
         run: |
           git show 76246db7809002b4af1e3c1f17a4adbe8a74b229:index.html > /tmp/cryptgrave-010.html
