@@ -41,6 +41,8 @@ jobs:
         run: node tests/game009b.cjs
       - name: Verify character dossier
         run: node tests/game009c.cjs
+      - name: Verify equipment and bag presentation
+        run: node tests/game009d.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
