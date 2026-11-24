@@ -59,7 +59,7 @@ function createSession(html,seed){
   if(!source||source.split(marker).length!==2)throw Error('Contrat de démarrage du moteur modifié');
   // L'instrumentation se fait uniquement en mémoire. Ne jamais écrire ce script dans index.html.
   const hook=source.slice(0,source.indexOf(marker))+ 
-    'return {newGame,move,activate,bandage,finish,hide,los,stepOK,canUseConsumable,useConsumable,healingLeft,save,restore,readHistory,buildDungeon,inventory,aimWeapon,searchNearby,canBuy,buyMerchant,canSell,sellMerchant,'+
+    'return {newGame,move,activate,bandage,finish,hide,los,stepOK,canUseConsumable,useConsumable,healingLeft,save,restore,readHistory,buildDungeon,inventory,aimWeapon,searchNearby,canBuy,buyMerchant,canSell,sellMerchant,parseTransfer,'+
     'eventChoiceAllowed,resolveEvent,specialRoomAllowed,resolveSpecialRoom,EXPLORATION_EVENTS,SPECIAL_ROOMS,'+
     'cancelTarget:()=>{selected=null},resume:()=>{mode="game";hide()},state:()=>({S,map,seen,monsters,loot,stairs,features,terrain,selected,mode,messages,overlayOpen:!overlay.classList.contains("hidden")}),'+
     'catalogs:()=>({CLASSES,ATTR,BASE,GEAR_SLOTS,RARITIES,GEAR_BASES,WEAPONS,WEAPON_BASE_IDS,STYLES,ADV_TALENTS,SYNERGIES,CONSUMABLES,POUCH_CAP,EXPLORATION_EVENTS,RARE_ENCOUNTERS,DOCTRINES,BALANCE,GEAR_SETS,UNIQUES,BESTIARY,CREATURE_POWERS,EXTENDED_BOSSES,MERCHANTS,GOLD_CAP,SPECIAL_ROOMS,BIOMES,AI_FAMILY,BOSS_PHASE_PATTERN,'+
@@ -114,7 +114,12 @@ function createSession(html,seed){
     if(!CLASSES_IDS.includes(id))throw Error('Classe inconnue');
     engine.newGame(id);return snapshot();
   }
-  return {start,action,snapshot,randomState:rng.snapshot,
+  // Restauration d'une fixture synthétique, strictement réservée aux tests ciblés.
+  function loadFixture(run){
+    engine.parseTransfer(JSON.stringify({format:'cryptgrave-transfer-v1',run,history:null,prefs:{zoom:100,pad:100}}));
+    storage.set(KEY,JSON.stringify(run));if(!engine.restore())throw Error('Fixture invalide');engine.resume();return snapshot();
+  }
+  return {start,action,snapshot,loadFixture,randomState:rng.snapshot,
     catalogs:()=>clone(engine.catalogs()),history:()=>clone(engine.readHistory()),
     saveData:()=>storage.has(KEY)?JSON.parse(storage.get(KEY)):null,
     // Requête pure sur la carte et la géométrie, sans références mutables exposées.
@@ -214,4 +219,4 @@ if(require.main===module){
   const data=mode==='catalog'?catalogDocument(createSession(html,0)):referencePack(html);
   fs.writeFileSync(output,JSON.stringify(data,null,2)+'\n');
 }
-module.exports={BASE,CLASSES_IDS,rng32,createSession,catalogDocument,digest,campaign,referencePack};
+module.exports={BASE,CLASSES_IDS,rng32,createSession,catalogDocument,digest,campaign,referencePack,route,record};
