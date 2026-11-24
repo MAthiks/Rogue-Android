@@ -73,6 +73,7 @@ function createSession(html,seed){
       if(engine.state().mode!=='game'||engine.state().overlayOpen)throw Error('Inventaire indisponible');
       const allowed=['equip','off','drop','spec','attr','rank','node','learn','bar','style','advanced','synergy'];
       if(!allowed.includes(command.kind))throw Error('Transaction inconnue');
+      if(command.kind==='bar'&&(!Number.isInteger(command.value)||command.value<0||command.value>4))throw Error('Compétence invalide');
       controls.clear();engine.inventory();
       const node=controls.get(command.kind+':'+command.id);
       if(node){if(command.kind==='bar'){node.value=String(command.value);node.onchange?.()}else node.onclick?.()}
