@@ -155,7 +155,7 @@ function useConsumable(id){
 }
 function consumablesMenu(){
  if(mode!=='game')return;selected=null;update();
- show('<h1>Consommables</h1><p>Sacoche indépendante · maximum 5 par type. Utiliser un objet coûte un tour ; aucun déplacement automatique.</p>'+['Potion','Parchemin','Utilitaire'].map(type=>'<h2>'+type+'s</h2><div class="classes">'+Object.entries(CONSUMABLES).filter(([,v])=>v.type===type).map(([id,v])=>'<button data-consume="'+id+'" '+(canUseConsumable(id)?'':'disabled')+'><span style="color:'+v.color+'">'+v.name+' ('+pouchCount(id)+'/5)</span><small>'+v.desc+'</small></button>').join('')+'</div>').join('')+'<button class="wide" id="close">Retour au donjon</button>');
+ show('<h1>Consommables</h1><p>Sacoche indépendante · maximum 5 par type. Utiliser un objet coûte un tour ; aucun déplacement automatique.</p>'+['Potion','Parchemin','Utilitaire'].map(type=>'<h2>'+type+'s</h2><div class="classes">'+Object.entries(CONSUMABLES).filter(([,v])=>v.type===type).map(([id,v])=>'<button data-consume="'+id+'" '+(canUseConsumable(id)?'':'disabled')+'>'+objectIcon(...lootArt({kind:'consumable',consumable:id}))+'<span style="color:'+v.color+'">'+v.name+' ('+pouchCount(id)+'/5)</span><small>'+v.desc+'</small></button>').join('')+'</div>').join('')+'<button class="wide" id="close">Retour au donjon</button>');
  panel.querySelectorAll('[data-consume]').forEach(b=>b.onclick=()=>{const id=b.dataset.consume;if(!canUseConsumable(id))return;hide();useConsumable(id)});
  document.getElementById('close').onclick=hide;
 }
@@ -310,7 +310,7 @@ function gearStats(it){return [['atk','ATQ'],['def','DEF'],['crit','CRIT'],['reg
 function escapeGear(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function gearLabel(it){
   const rarity=RARITIES[rarityOf(it)-1],set=GEAR_SETS[it.setId];
-  return '<span style="color:'+rarity.color+'">'+escapeGear(it.name)+'</span><small class="gear-detail">'+rarity.name+(it.itemLevel?' · Niv. objet '+it.itemLevel:'')+' · '+gearStats(it)+(weaponFamily(it)?' · '+WEAPONS[weaponFamily(it)].desc:'')+(set?' · Ensemble '+set.name+' ('+setCount(S.equip,it.setId)+'/3)':it.uniqueId||it.bossRelic?' · Unique':'')+'</small>';
+  return objectIcon(...lootArt({kind:'gear',item:it}))+'<span style="color:'+rarity.color+'">'+escapeGear(it.name)+'</span><small class="gear-detail">'+rarity.name+(it.itemLevel?' · Niv. objet '+it.itemLevel:'')+' · '+gearStats(it)+(weaponFamily(it)?' · '+WEAPONS[weaponFamily(it)].desc:'')+(set?' · Ensemble '+set.name+' ('+setCount(S.equip,it.setId)+'/3)':it.uniqueId||it.bossRelic?' · Unique':'')+'</small>';
 }
 function setSummary(){
   const line=stats=>Object.entries(stats).map(([k,v])=>gearStats({[k]:v})).join(', ');
@@ -765,15 +765,82 @@ function triggerTrap(x,y){
   const f=featureAt(x,y);if(!f||f.type!=='trap'||f.spent)return;
   f.found=true;f.spent=true;S.hp=Math.max(0,S.hp-f.damage);say('Piège déclenché : -'+f.damage+' PV.');if(S.hp===0)die();
 }
-function drawFeature(f,px,py,visible){
-  if(!f||!f.found)return;
-  if(f.type==='door'||f.type==='secret'){
-    if(f.open){ctx.fillStyle=visible?'#866843':'#4b4034';ctx.fillRect(px+1,py+2,3,12);ctx.fillRect(px+12,py+2,3,12)}
-    else{ctx.fillStyle=visible?'#a58150':'#554834';ctx.fillRect(px+2,py+1,12,14);ctx.fillStyle='#57432b';ctx.fillRect(px+5,py+1,1,14);ctx.fillRect(px+10,py+1,1,14);ctx.fillStyle='#ebcb81';ctx.fillRect(px+10,py+7,2,2)}
-  }else if(f.type==='chest'){
-    ctx.fillStyle=visible?'#a5743e':'#5c472e';ctx.fillRect(px+3,py+6,10,7);ctx.fillStyle=f.open?'#2a2522':'#edc879';ctx.fillRect(px+4,py+7,8,2);ctx.fillRect(px+7,py+9,2,2);
-  }else if(f.type==='specialRoom'){drawSpecialRoom(f,px,py,visible)}else if(f.type==='merchant'){ctx.fillStyle=MERCHANTS[f.merchantId]?.color||'#bba67c';ctx.fillRect(px+5,py+2,6,4);ctx.fillRect(px+3,py+6,10,7);ctx.fillStyle='#efcf83';ctx.fillRect(px+7,py+8,3,3)}else if(f.type==='event'){ctx.fillStyle=f.spent?'#666b70':(EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9');ctx.fillRect(px+6,py+2,4,3);ctx.fillRect(px+4,py+5,8,7);ctx.fillRect(px+7,py+13,2,2);if(!f.spent){ctx.fillStyle='#f6e7c4';ctx.fillRect(px+7,py+6,2,4)}}else if(f.type==='trap'){ctx.fillStyle=f.spent?'#777d76':'#cf7965';ctx.fillRect(px+3,py+10,10,2);if(!f.spent){ctx.fillRect(px+4,py+5,2,5);ctx.fillRect(px+10,py+5,2,5)}}
+// GAME-007E: native item and feature pixel plans, shared by map and inventory.
+const OBJECT_ART={
+ blade:['........o.','.......oho','......oho.','.....oho..','....oho...','...oho....','.ooho.....','..oho.....','.oHo......','oo........'],
+ axe:['.....oooo.','....oHHHHo','....ohHHHo','.....oooo.','....oHo...','...oHo....','..oHo.....','.oHo......','oHo.......','oo........'],
+ mace:['.....ooo..','....oHhHo.','...oHhHhHo','....oHHHo.','.....ooo..','....oHo...','...oHo....','..oHo.....','.oHo......','oo........'],
+ dagger:['..........','..........','......oo..','.....oho..','....oho...','...oho....','..ooo.....','..oHo.....','.oHo......','.oo.......'],
+ spear:['........oo','.......oho','......oho.','.....ooo..','....oHo...','...oHo....','..oHo.....','.oHo......','oHo.......','oo........'],
+ bow:['..oo......','..oHo.....','..o.Ho....','..o..Ho...','..o...Ho..','..o...Ho..','..o..Ho...','..o.Ho....','..oHo.....','..oo......'],
+ staff:['.....oooo.','....ohhHHo','....oheHHo','.....oooo.','.....oHo..','....oHo...','...oHo....','..oHo.....','.oHo......','oo........'],
+ armor:['.oo....oo.','oHHooooHHo','oHhHHHHhHo','ooHHHHHHoo','..oHHHHo..','..oHhhHo..','..oHHHHo..','..oHHHHo..','..oooooo..','..........'],
+ helmet:['..........','...oooo...','..ohhhHo..','.oHHHHHHo.','.oHeeHHHo.','.oHooooHo.','.oHH..HHo.','..oo..oo..','..........','..........'],
+ boots:['..........','..oo..oo..','..oH..oH..','..oH..oH..','..oH..oH..','.ooH.ooH..','oHHHoHHHo.','ooooooooo.','..........','..........'],
+ ring:['....oo....','...oeeo...','..oHhHHo..','.oHo..oHo.','.oH....Ho.','.oH....Ho.','.oHo..oHo.','..oHHHHo..','...oooo...','..........'],
+ gear:['...oooo...','..oHHHHo..','..ohhhHo..','.oHHHHHHo.','.oHHeHHHo.','.oHHHHHHo.','.oHHHHHHo.','..oooooo..','..........','..........'],
+ bandage:['..........','..oooooo..','.ohhHHHHo.','.oHhHHhHo.','.oHHhhHHo.','.oHhHHhHo.','.oHHHhhHo.','..oooooo..','..........','..........'],
+ potion:['....oo....','...oHHo...','...oooo...','...oHHo...','..oHhhHo..','.oHhhhhHo.','.oHHheHHo.','.oHHHHHHo.','..oooooo..','..........'],
+ scroll:['..oooooo..','.ohhhhHHo.','.oHooooHo.','.oHHHHHHo.','.oHoooHHo.','.oHHHeHHo.','.oHHHHHHo.','.oHHHHHHo.','..oooooo..','..........'],
+ smoke:['......oo..','.....oHo..','....ooo...','..ooHHoo..','.oHHHHHHo.','.oHhHeHHo.','.oHHHHHHo.','..oHHHHo..','...oooo...','..........'],
+ toolkit:['..........','...oooo...','...o..o...','.oooooooo.','oHHHHHHHHo','oHhhHHhhHo','oHHHeeHHHo','oHHHHHHHHo','.oooooooo.','..........'],
+ door:['oooooooooo','oHhHHhHHHo','oHhHHhHHHo','oHhHHhHHHo','oHhHHhHeHo','oHhHHhHHHo','oHhHHhHHHo','oHhHHhHHHo','oHhHHhHHHo','oooooooooo'],
+ secret:['oooooooooo','oHHhHHHHHo','oHHhHHHHHo','oHhhhhHHHo','oHHhHHeHHo','oHHhHHHHHo','oHHHHhHHHo','oHHHHhHHHo','oHHHHHHHHo','oooooooooo'],
+ doorOpen:['oo......oo','oH......Ho','oH......Ho','oH......Ho','oH......Ho','oH......Ho','oH......Ho','oH......Ho','oH......Ho','oo......oo'],
+ chest:['..........','..........','..oooooo..','.oHHHHHHo.','oHhhhhHHHo','oooooooooo','oHHHeeHHHo','oHHHeeHHHo','oooooooooo','..........'],
+ chestOpen:['..........','..oooooo..','.oHHHHHHo.','.oooooooo.','oHo....oHo','oHooooooHo','oHHHHHHHHo','oHHHHHHHHo','oooooooooo','..........'],
+ trap:['..........','..o....o..','..h....h..','.oHo..oHo.','.oHo..oHo.','oHHooooHHo','oHhHHhHHHo','oooooooooo','..........','..........'],
+ trapSpent:['..........','..........','..........','..........','..........','..oo..oo..','oHHooooHHo','oooooooooo','..........','..........'],
+ stairs:['oooooooooo','ohhhhhhhho','oHHHHHHHHo','oohhhhhhho','ooHHHHHHHo','ooohhhhhho','oooHHHHHHo','oooohhhhho','ooooHHHHHo','oooooooooo'],
+ arms:['...oooo...','..oHHHHo..','..oHeeHo..','...oooo..o','..oHHHHo.h','.oHhHHHHoH','.oHHHHHHoH','..oHHHHo.o','..oHooHo..','..oo..oo..'],
+ apothecary:['...oooo...','..oHHHHo..','..oHeeHo..','...oooo...','..oHHHHo..','.oHHhHHHo.','.oHhooHHo.','.oHheehHo.','..oHHHHo..','..oooooo..'],
+ trader:['..oooooo..','.ohhhHHHo.','..oHeeHo..','...oooo...','ooHooooHoo','oHHHHHHHHo','oHhHHHHhHo','ooHHHHHHoo','..oHooHo..','..oo..oo..'],
+ shrine:['....oo....','...oeeo...','...oHHo...','..oHHHHo..','..ohhhHo..','.oHHHHHHo.','.oHHHHHHo.','oooooooooo','oHHHHHHHHo','oooooooooo'],
+ cache:['..........','...oooo...','..oHHHHo..','.oHhHHhHo.','.oHHHHHHo.','.oHHHHHHo.','.oHheehHo.','..oHHHHo..','...oooo...','..........'],
+ fountain:['..........','....oo....','...oeeo...','..oHeeHo..','.oHHHHHHo.','oooooooooo','oheeeeehHo','oHHHHHHHHo','.oooooooo.','..........'],
+ obelisk:['....oo....','...ohHo...','...ohHo...','...oHeo...','...oeHo...','...ohHo...','...ohHo...','..oHHHHo..','.oooooooo.','..........'],
+ survivor:['...oooo...','..oHHHHo..','..oHeeHo..','...oooo...','..oHHHHo..','.oHhhhHHo.','..oHHHHo..','..oHHHHo..','.oHooHHo..','.ooo.ooo..'],
+ sanctuary:['....oo....','....ee....','..oooooo..','..oHhhHo..','..oHHHHo..','.oHHHHHHo.','.oHHHHHHo.','oooooooooo','oHHHHHHHHo','oooooooooo'],
+ library:['oooooooooo','ohHhHhHhHo','ohHhHhHhHo','oooooooooo','oHhHhHhHho','oHhHhHhHho','oooooooooo','oHhHhHhHho','oHhHhHhHho','oooooooooo'],
+ vault:['.oooooooo.','oHhHHHHhHo','oHhHHHHhHo','oHhHeeHhHo','oHhHeeHhHo','oHhHHHHhHo','oHhHHHHhHo','.oooooooo.','..........','..........'],
+ cursed:['o........o','oh......ho','.oH....Ho.','..oHeeHo..','..oHeeHo..','.oHHHHHHo.','..oHHHHo..','.oHHHHHHo.','oooooooooo','..........'],
+ hidden:['...oooo...','..ohhhHo..','.oHeeeeHo.','.oHHHHHHo.','.oHHeeHHo.','.oHHHHHHo.','..oHHHHo..','..oooooo..','..........','..........']
+};
+const OBJECT_ART_CACHE=new Map(),OBJECT_CACHE_LIMIT=256;
+function objectSprite(id,color,visible=true,spent=false){
+ id=Object.hasOwn(OBJECT_ART,id)?id:'gear';
+ color=/^#[0-9a-f]{6}$/i.test(color||'')?color:'#a6b8ba';
+ const key=[id,color,visible,spent].join(':');if(OBJECT_ART_CACHE.has(key))return OBJECT_ART_CACHE.get(key);
+ const base=spent?tileTint('#858990',.72):color;
+ const tint=visible?1:.48;
+ const palette={o:tileTint('#22202a',tint),H:tileTint(base,tint),h:tileTint(base,1.3*tint),e:tileTint(spent?'#858990':'#ffe7ae',tint)};
+ const ops=[];OBJECT_ART[id].forEach((row,y)=>{for(let x=0;x<row.length;){const v=row[x];let end=x+1;while(end<row.length&&row[end]===v)end++;if(v!=='.')ops.push([palette[v],x+3,y+3,end-x,1]);x=end}});
+ if(OBJECT_ART_CACHE.size>=OBJECT_CACHE_LIMIT)OBJECT_ART_CACHE.delete(OBJECT_ART_CACHE.keys().next().value);
+ OBJECT_ART_CACHE.set(key,ops);return ops;
 }
+function lootArt(l){
+ if(l.kind==='bandage')return ['bandage','#d5c7a4'];
+ if(l.kind==='consumable'){const v=CONSUMABLES[l.consumable];return [v?.type==='Potion'?'potion':v?.type==='Parchemin'?'scroll':l.consumable==='smoke'?'smoke':l.consumable==='toolkit'?'toolkit':'gear',v?.color||'#a6b8ba']}
+ const it=l.item;if(!it)return ['gear','#85b8d5'];
+ return [it.slot==='weapon'?weaponFamily(it)||'blade':Object.hasOwn(OBJECT_ART,it.slot)?it.slot:'gear',RARITIES[rarityOf(it)-1].color];
+}
+function featureArt(f){
+ if(!f||!f.found)return null;
+ if(f.type==='door'||f.type==='secret')return [f.open?'doorOpen':f.type,'#a58150',false];
+ if(f.type==='chest')return [f.open?'chestOpen':'chest','#c18b47',false];
+ if(f.type==='trap')return [f.spent?'trapSpent':'trap','#cf7965',!!f.spent];
+ if(f.type==='merchant')return [f.merchantId,MERCHANTS[f.merchantId]?.color||'#bba67c',false];
+ if(f.type==='event')return [f.eventId,EXPLORATION_EVENTS[f.eventId]?.color||'#b6a0d9',!!f.spent];
+ if(f.type==='specialRoom')return [f.roomId,SPECIAL_ROOMS[f.roomId]?.color||'#d2c5a1',!!f.spent];
+ return null;
+}
+function drawObject(id,color,px,py,visible=true,spent=false){
+ for(const [c,x,y,w,h] of objectSprite(id,color,visible,spent)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
+}
+function objectIcon(id,color){
+ return '<svg aria-hidden="true" viewBox="0 0 16 16" width="24" height="24" style="vertical-align:middle;shape-rendering:crispEdges;margin-right:5px">'+objectSprite(id,color).map(([c,x,y,w,h])=>'<rect fill="'+c+'" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"/>').join('')+'</svg>';
+}
+function drawFeature(f,px,py,visible){const a=featureArt(f);if(a)drawObject(a[0],a[1],px,py,visible,a[2])}
 function biomeForFloor(floor,seed){
   const original=['crypt','cave','ruins','volcanic','sanctum'][Math.min(4,Math.max(0,Math.floor((floor-1)/6)))];
   // Preserve the historical route when no seed is supplied, and on boss floors.
@@ -1194,7 +1261,7 @@ function drawEnemySprite(m,px,py){
  if(m.boss){drawBossSprite(m,px,py);return}
  for(const [c,x,y,w,h] of enemySprite(m)){ctx.fillStyle=c;ctx.fillRect(px+x,py+y,w,h)}
 }
-function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){ctx.fillStyle='#e4c174';ctx.fillRect(px+3,py+3,10,10);ctx.fillStyle='#4c3825';ctx.fillRect(px+6,py+5,4,7)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;ctx.fillStyle=l.kind==='gear'?(l.item?RARITIES[rarityOf(l.item)-1].color:'#85b8d5'):l.kind==='consumable'?(CONSUMABLES[l.consumable]?.color||'#a6b8ba'):'#c9b66c';if(l.kind==='consumable'){ctx.fillRect(px+7,py+2,3,3);ctx.fillRect(px+5,py+5,7,7)}else ctx.fillRect(px+5,py+4,7,8);ctx.fillStyle='#fff0ca';ctx.fillRect(px+7,py+5,2,2)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
+function render(){if(!S)return;const biome=currentBiome(),VIEWW=canvas.width/T,VIEWH=canvas.height/T,ox=S.x-Math.floor(VIEWW/2),oy=S.y-Math.floor(VIEWH/2);ctx.fillStyle='#090e13';ctx.fillRect(0,0,canvas.width,canvas.height);for(let vy=0;vy<VIEWH;vy++)for(let vx=0;vx<VIEWW;vx++){let x=vx+ox,y=vy+oy,i=idx(x,y);if(!inside(x,y)||!seen[i])continue;let visible=los(x,y),wall=map[i]===1,px=vx*T,py=vy*T;drawBiomeTile(biome,x,y,wall,visible,px,py);drawTerrain(terrain.find(t=>t.x===x&&t.y===y),px,py,visible);drawFeature(featureAt(x,y),px,py,visible);if(visible&&monsters.some(m=>m.intent?.cells.some(p=>p.x===x&&p.y===y))){ctx.fillStyle='#813d3d';ctx.fillRect(px+1,py+1,14,14);ctx.strokeStyle='#ff9274';ctx.strokeRect(px+1,py+1,14,14)}if(visible&&x===stairs.x&&y===stairs.y){drawObject('stairs','#d4b46f',px,py)}}for(const l of loot){if(!los(l.x,l.y))continue;let px=(l.x-ox)*T,py=(l.y-oy)*T;const [id,color]=lootArt(l);drawObject(id,color,px,py)}for(const m of monsters){if(!los(m.x,m.y))continue;let px=(m.x-ox)*T,py=(m.y-oy)*T;drawEnemySprite(m,px,py);drawCreatureMark(m,px,py);drawBossPhase(m,px,py);if(m.boss||m.rare){ctx.strokeStyle=m.rare?'#d6b7ff':'#e4a15d';ctx.strokeRect(px,py,16,16)}if(!m.boss&&(m.role==='guardian'||m.elite)){ctx.fillStyle='#f1cd7b';ctx.fillRect(px+4,py+3,8,2)}if(m.aim){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}ctx.fillStyle='#3d2529';ctx.fillRect(px+2,py+1,12,2);ctx.fillStyle='#dfb17a';ctx.fillRect(px+2,py+1,Math.max(1,Math.round(12*m.hp/m.maxHp)),2)}let px=(S.x-ox)*T,py=(S.y-oy)*T;drawPlayerSprite(px,py);if(selected!==null){ctx.strokeStyle='#f2c979';ctx.strokeRect(px+1,py+1,14,14)}}
 function legacyInventory(){if(mode!=='game')return;show(`<h1>Personnage</h1><p><b>${CLASSES[S.classId].name}</b> · niveau ${S.level} · ${S.xp}/${8+S.level*6} XP<br>Attaque +${S.atk} · Armure +${S.armor} · Bandages ${S.bandages}<br>Ennemis vaincus : ${S.kills}</p><p>Points de talent : <b>${S.points}</b></p><p>Investis un point pour augmenter tes dégâts ou ta santé maximale.</p><button class="wide" id="upatk" ${S.points?'':'disabled'}>+1 Attaque (1 point)</button><button class="wide" id="uphp" ${S.points?'':'disabled'}>+5 PV maximum (1 point)</button><button class="wide" id="close">Retour au donjon</button>`);document.getElementById('close').onclick=hide;for(let [id,key] of [['upatk','atk'],['uphp','hp']])document.getElementById(id).onclick=()=>{if(!S.points)return;S.points--;if(key==='atk')S.atk++;else{S.maxHp+=5;S.hp+=5}save();update();inventory()}}
 const SPECS={warrior:['Berserker','Sentinelle'],rogue:['Assassin','Duelliste'],ranger:['Tireur','Survivant'],mage:['Évocateur','Protecteur']};
 const ATTRHELP=['Dégâts du guerrier','Dégâts du voleur et du rôdeur, esquive','PV et défense','Ressource maximale et régénération','Dégâts magiques et soins','Chance de critique'];
