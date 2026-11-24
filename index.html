@@ -1596,10 +1596,27 @@ button:disabled{
 <script>
 (()=>{'use strict';
 /* TECH-012C — Dimensions de la grille logique (W, H), taille native des sprites (T) et références DOM. KEY est une clé historique : la renommer empêcherait de retrouver les sauvegardes existantes. */
-const W=48,H=32,T=16,VIEWW=40,VIEWH=24,KEY='rogue-android-game002-v1',canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),log=document.getElementById('log'),stats=document.getElementById('stats'),overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
+const W=48,H=32,T=16,VIEWW=40,VIEWH=24,KEY='rogue-android-game002-v1',
+  canvas=document.getElementById('game'),
+  ctx=canvas.getContext('2d'),
+  log=document.getElementById('log'),
+  stats=document.getElementById('stats'),
+  overlay=document.getElementById('overlay'),
+  panel=document.getElementById('panel');
 /* TECH-012C — Catalogue des quatre classes. Chaque compétence est décrite par [nom, coût en ressource, recharge en tours, mode de ciblage]. */
-const CLASSES={warrior:{name:'Guerrier',desc:'Robuste · parade et frappe',hp:28,res:'Endurance',maxRes:12,color:'#a5c8ce',skills:[['Frappe',3,3,'direction'],['Souffle',4,6,'heal'],['Garde',2,5,'guard']]},rogue:{name:'Voleur',desc:'Rapide · critique et esquive',hp:21,res:'Énergie',maxRes:14,color:'#b8c49a',skills:[['Estoc',3,3,'direction'],['Esquive',3,5,'guard'],['Focus',2,5,'boost']]},ranger:{name:'Rôdeur',desc:'Précis · tirs et survie',hp:23,res:'Concentration',maxRes:12,color:'#d2bd88',skills:[['Tir',3,3,'ranged'],['Soin',4,6,'heal'],['Visée',2,5,'boost']]},mage:{name:'Arcaniste',desc:'Fragile · magie à distance',hp:18,res:'Mana',maxRes:16,color:'#b4a8db',skills:[['Éclair',4,3,'ranged'],['Soin',5,6,'heal'],['Barrière',3,5,'guard']]}};
-const ADV={warrior:[['Brise-garde',5,5,'direction'],['Bastion',5,8,'guard']],rogue:[['Exécution',6,5,'direction'],['Disparition',4,8,'guard']],ranger:[['Tir perforant',5,5,'ranged'],['Second souffle',5,8,'heal']],mage:[['Décharge',6,5,'ranged'],['Égide',5,8,'guard']]};for(const k of Object.keys(ADV))CLASSES[k].skills.push(...ADV[k]);const unlocked=i=>i<3||!!S.activeTalents[i];const PREF='rogue-android-display-v1';let prefs={zoom:100,pad:100};try{const p=JSON.parse(localStorage.getItem(PREF));if(p){if([75,100,125,150,200].includes(p.zoom))prefs.zoom=p.zoom;if([85,100,115].includes(p.pad))prefs.pad=p.pad}}catch(e){};
+const CLASSES={warrior:{name:'Guerrier',desc:'Robuste · parade et frappe',hp:28,res:'Endurance',maxRes:12,color:'#a5c8ce',skills:[['Frappe',3,3,'direction'],['Souffle',4,6,'heal'],['Garde',2,5,'guard']]},
+  rogue:{name:'Voleur',desc:'Rapide · critique et esquive',hp:21,res:'Énergie',maxRes:14,color:'#b8c49a',skills:[['Estoc',3,3,'direction'],['Esquive',3,5,'guard'],['Focus',2,5,'boost']]},
+  ranger:{name:'Rôdeur',desc:'Précis · tirs et survie',hp:23,res:'Concentration',maxRes:12,color:'#d2bd88',skills:[['Tir',3,3,'ranged'],['Soin',4,6,'heal'],['Visée',2,5,'boost']]},
+  mage:{name:'Arcaniste',desc:'Fragile · magie à distance',hp:18,res:'Mana',maxRes:16,color:'#b4a8db',skills:[['Éclair',4,3,'ranged'],['Soin',5,6,'heal'],['Barrière',3,5,'guard']]}};
+const ADV={warrior:[['Brise-garde',5,5,'direction'],['Bastion',5,8,'guard']],
+  rogue:[['Exécution',6,5,'direction'],['Disparition',4,8,'guard']],
+  ranger:[['Tir perforant',5,5,'ranged'],['Second souffle',5,8,'heal']],
+  mage:[['Décharge',6,5,'ranged'],['Égide',5,8,'guard']]};
+  for(const k of Object.keys(ADV))CLASSES[k].skills.push(...ADV[k]);
+  const unlocked=i=>i<3||!!S.activeTalents[i];
+  const PREF='rogue-android-display-v1';
+  let prefs={zoom:100,pad:100};
+  try{const p=JSON.parse(localStorage.getItem(PREF));if(p){if([75,100,125,150,200].includes(p.zoom))prefs.zoom=p.zoom;if([85,100,115].includes(p.pad))prefs.pad=p.pad}}catch(e){};
 /* TECH-012A — Applique les préférences d'affichage et de commandes tactiles, puis recalcule la taille de la carte. L'échec du stockage des préférences ne doit pas bloquer le jeu. */
 function applyPrefs(){
   const small=innerHeight<=430;
@@ -1722,7 +1739,11 @@ const RARITIES=[
   {name:'Rare',color:'#87bbff'},{name:'Épique',color:'#c8a1ff'},
   {name:'Légendaire',color:'#f0b85d'}
 ];
-const GEAR_BASES={weapon:['Lame','Hache','Masse','Dague','Lance','Arc','Bâton'],armor:['Cotte','Plastron','Cuirasse'],ring:['Anneau','Sceau','Jonc'],helmet:['Heaume','Capuche','Casque'],boots:['Bottes','Grèves','Bottines']};
+const GEAR_BASES={weapon:['Lame','Hache','Masse','Dague','Lance','Arc','Bâton'],
+  armor:['Cotte','Plastron','Cuirasse'],
+  ring:['Anneau','Sceau','Jonc'],
+  helmet:['Heaume','Capuche','Casque'],
+  boots:['Bottes','Grèves','Bottines']};
 // GAME-005B: weapon profiles affect basic attacks, not class skill formulas.
 const WEAPONS={
   blade:{name:'Lame',range:1,cost:0,power:1,crit:0,desc:'+1 dégât de base'},
@@ -1928,8 +1949,11 @@ function rollConsumable(floor,rng=rand){
 }
 function placeConsumable(d,decorated,terrain,existing,floor,rng=rand){
  const used=new Set([d.start,d.stairs,...d.monsters,...existing,...decorated.features,...terrain].map(p=>p.x+','+p.y));
- const candidates=[];for(const room of d.rooms){for(let y=room.y;y<room.y+room.h;y++)for(let x=room.x;x<room.x+room.w;x++){if(decorated.map[y*W+x]===0&&!used.has(x+','+y)&&Math.max(Math.abs(x-d.start.x),Math.abs(y-d.start.y))>=4)candidates.push({x,y})}}
- if(!candidates.length)return [];const result=[];for(let i=0;i<(floor>=10?2:1)&&candidates.length;i++){const p=candidates.splice(rng(candidates.length),1)[0];result.push({...p,kind:'consumable',consumable:rollConsumable(floor,rng)})}return result;
+ const candidates=[];
+   for(const room of d.rooms){for(let y=room.y;y<room.y+room.h;y++)for(let x=room.x;x<room.x+room.w;x++){if(decorated.map[y*W+x]===0&&!used.has(x+','+y)&&Math.max(Math.abs(x-d.start.x),Math.abs(y-d.start.y))>=4)candidates.push({x,y})}}
+ if(!candidates.length)return [];
+   const result=[];
+   for(let i=0;i<(floor>=10?2:1)&&candidates.length;i++){const p=candidates.splice(rng(candidates.length),1)[0];result.push({...p,kind:'consumable',consumable:rollConsumable(floor,rng)})}return result;
 }
 function consumableTargets(id){
  if(id==='insight')return features.filter(f=>['trap','secret'].includes(f.type)&&!f.found&&!f.spent&&dist(f,S)<=6);
@@ -2021,7 +2045,9 @@ function buildExploration(d,decorated,terrain,existing,monsters,floor){
  }
  const events=[];const count=rnd(100)<65?(floor>=10&&rnd(100)<35?2:1):0;
  for(let i=0;i<count&&candidates.length;i++){const p=candidates.splice(rnd(candidates.length),1)[0];events.push({...p,type:'event',eventId:eligible[rnd(eligible.length)][0],found:true,spent:false})}
- let rare=null;if(floor>=3&&rnd(100)<18){const pool=monsters.filter(m=>!m.boss&&!m.elite&&Math.max(Math.abs(m.x-d.start.x),Math.abs(m.y-d.start.y))>8);if(pool.length){const m=pool[rnd(pool.length)],variants=RARE_ENCOUNTERS.filter(v=>floor>=(v.min||3)),v=variants[rnd(variants.length)];rare={...m,...(v.role?{role:v.role}:{}),rare:v.id,kind:v.name,color:v.color,elite:true,affix:v.affix,hp:Math.ceil(m.maxHp*1.3)+2,maxHp:Math.ceil(m.maxHp*1.3)+2}}}
+ let rare=null;
+   if(floor>=3&&rnd(100)<18){const pool=monsters.filter(m=>!m.boss&&!m.elite&&Math.max(Math.abs(m.x-d.start.x),Math.abs(m.y-d.start.y))>8);
+   if(pool.length){const m=pool[rnd(pool.length)],variants=RARE_ENCOUNTERS.filter(v=>floor>=(v.min||3)),v=variants[rnd(variants.length)];rare={...m,...(v.role?{role:v.role}:{}),rare:v.id,kind:v.name,color:v.color,elite:true,affix:v.affix,hp:Math.ceil(m.maxHp*1.3)+2,maxHp:Math.ceil(m.maxHp*1.3)+2}}}
  return {events,rare};
 }
 function eventChoiceAllowed(f,choice){
@@ -2203,7 +2229,10 @@ function createGear(id,floor,minimum=1,rng=rand,forcedRarity=null){
   const depth=Math.max(1,Math.min(30,floor)),grade=1+Math.floor((depth-1)/8);
   const slots=Object.keys(GEAR_SLOTS),slot=slots[rng(slots.length)];
   const rarity=forcedRarity??rollRarity(depth,rng(100),minimum);
-  const it={id,slot,name:'',rarity,itemLevel:depth,grade,atk:slot==='weapon'?grade:slot==='ring'?Math.ceil(grade/2):0,def:slot==='armor'?grade:slot==='helmet'||slot==='boots'?Math.ceil(grade/2):0,crit:0,regen:0,dodge:0,affixes:[]};
+  const it={id,slot,name:'',rarity,itemLevel:depth,grade,
+    atk:slot==='weapon'?grade:slot==='ring'?Math.ceil(grade/2):0,
+    def:slot==='armor'?grade:slot==='helmet'||slot==='boots'?Math.ceil(grade/2):0,
+    crit:0,regen:0,dodge:0,affixes:[]};
   const base=GEAR_BASES[slot][rng(GEAR_BASES[slot].length)];
   it.name=RARITIES[rarity-1].name+' · '+base;
   if(slot==='weapon')it.family=WEAPON_BASE_IDS[base];
@@ -2262,13 +2291,18 @@ function readHistory(){
    h.fastestWin=Number.isFinite(raw.fastestWin)&&raw.fastestWin>=0?historyNumber(raw.fastestWin):null;
    for(const k of Object.keys(h.classWins))h.classWins[k]=historyNumber(raw.classWins?.[k]);
    h.challenges=Array.isArray(raw.challenges)?raw.challenges.filter(x=>['first-win','swift','collector','all-classes'].includes(x)):[];
-   h.runs=Array.isArray(raw.runs)?raw.runs.filter(r=>r&&Object.hasOwn(CLASSES,r.classId)&&['victory','death','abandoned'].includes(r.outcome)).slice(0,HISTORY_LIMIT).map(r=>({classId:r.classId,outcome:r.outcome,floor:historyNumber(r.floor),level:historyNumber(r.level),kills:historyNumber(r.kills),turns:historyNumber(r.turns),gold:historyNumber(r.gold),relics:historyNumber(r.relics),score:historyNumber(r.score),spec:['offense','defense'].includes(r.spec)?r.spec:null})):[];
+   h.runs=Array.isArray(raw.runs)?raw.runs.filter(r=>r&&Object.hasOwn(CLASSES,r.classId)
+     &&['victory','death','abandoned'].includes(r.outcome))
+     .slice(0,HISTORY_LIMIT)
+     .map(r=>({classId:r.classId,outcome:r.outcome,floor:historyNumber(r.floor),level:historyNumber(r.level),kills:historyNumber(r.kills),turns:historyNumber(r.turns),gold:historyNumber(r.gold),relics:historyNumber(r.relics),score:historyNumber(r.score),spec:['offense','defense'].includes(r.spec)?r.spec:null})):[];
  }catch(e){}
  return h;
 }
 /* TECH-012C — Calcule le score final et compte les reliques de boss distinctes dans le sac et l'équipement. */
 function runSummary(outcome){
- const floor=historyNumber(S.floor),level=historyNumber(S.level),kills=historyNumber(S.kills),turns=historyNumber(S.turn),gold=goldBalance(),relics=new Set([...S.bag,...Object.values(S.equip)].filter(it=>it?.bossRelic&&it.uniqueId).map(it=>it.uniqueId)).size;
+ const floor=historyNumber(S.floor),level=historyNumber(S.level),kills=historyNumber(S.kills),
+   turns=historyNumber(S.turn),gold=goldBalance(),
+   relics=new Set([...S.bag,...Object.values(S.equip)].filter(it=>it?.bossRelic&&it.uniqueId).map(it=>it.uniqueId)).size;
  const score=Math.min(1000000000,floor*100+level*50+kills*10+relics*100+gold+(outcome==='victory'?2000:0));
  return {classId:S.classId,spec:S.spec||null,outcome,floor,level,kills,turns,gold,relics,score};
 }
@@ -2384,7 +2418,9 @@ function importTransfer(text){
  if(mode!=='start')throw Error('Retourne au menu principal.');
  const b=parseTransfer(text),entries=[[KEY,b.run],[HISTORY_KEY,b.history],[PREF,b.prefs]],old=entries.map(([k])=>[k,localStorage.getItem(k)]);
  try{for(const [k,v] of entries){if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}}
- catch(e){let restored=true;for(const [k,v] of old)try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(err){restored=false}throw Error(restored?'Import impossible : données précédentes conservées.':'Stockage indisponible : vérifie tes données avant de continuer.')}
+ catch(e){let restored=true;
+   for(const [k,v] of old)try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(err){restored=false
+   }throw Error(restored?'Import impossible : données précédentes conservées.':'Stockage indisponible : vérifie tes données avant de continuer.')}
  // Do not let the previous in-memory run overwrite the imported state on visibilitychange.
  S=null;
  selected=null;
@@ -2396,8 +2432,16 @@ function transferMenu(){
  if(mode!=='start')return;
  show('<h1>Transfert de sauvegarde</h1><p>Copie le texte dans un fichier privé, puis colle-le sur le nouvel appareil. Un import remplace la partie, les records et les options. Un ancien export peut revenir à un état antérieur : à réserver aux migrations, pas aux reprises après une mort.</p><textarea id="transferData" aria-label="Texte de transfert" spellcheck="false" style="width:100%;height:140px;resize:vertical;background:#101318;color:#eee5d4;border:1px solid #514534"></textarea><button class="wide" id="transferExport">Exporter et sélectionner</button><button class="wide" id="transferImport">Importer le texte</button><p id="transferStatus" aria-live="polite"></p><button class="wide" id="transferBack">Retour</button>');
  const field=document.getElementById('transferData'),status=document.getElementById('transferStatus');
- document.getElementById('transferExport').onclick=()=>{try{field.value=exportTransfer();field.focus();field.select();status.textContent='Texte sélectionné. Utilise Copier dans le menu de sélection Android.'}catch(e){status.textContent='Export impossible : sauvegarde incompatible ou stockage indisponible.'}};
- document.getElementById('transferImport').onclick=()=>{try{const b=parseTransfer(field.value);const label=b.run?CLASSES[b.run.S.classId].name+' · étage '+b.run.S.floor+' · tour '+b.run.S.turn:'Aucune partie active';if(!confirm('Importer '+label+' ? La partie, le Panthéon et les options actuels seront remplacés.'))return;importTransfer(field.value);applyPrefs();startMenu()}catch(e){status.textContent=e.message||'Import impossible.'}};
+ document.getElementById('transferExport').onclick=()=>{try{field.value=exportTransfer();
+   field.focus();
+   field.select();
+   status.textContent='Texte sélectionné. Utilise Copier dans le menu de sélection Android.'}catch(e){status.textContent='Export impossible : sauvegarde incompatible ou stockage indisponible.'}};
+ document.getElementById('transferImport').onclick=()=>{try{const b=parseTransfer(field.value);
+   const label=b.run?CLASSES[b.run.S.classId].name+' · étage '+b.run.S.floor+' · tour '+b.run.S.turn:'Aucune partie active';
+   if(!confirm('Importer '+label+' ? La partie, le Panthéon et les options actuels seront remplacés.'))return;
+   importTransfer(field.value);
+   applyPrefs();
+   startMenu()}catch(e){status.textContent=e.message||'Import impossible.'}};
  document.getElementById('transferBack').onclick=startMenu;
 }
 
@@ -2499,7 +2543,10 @@ function creatureAction(m,player,all,board){
  if(!m.species||m.boss||!Object.hasOwn(CREATURE_POWERS,m.creatureSkill))return null;
  const skill=CREATURE_POWERS[m.creatureSkill],distance=(a,b)=>Math.max(Math.abs(a.x-b.x),Math.abs(a.y-b.y)),same=(a,b)=>a.x===b.x&&a.y===b.y;
  const ray=(a,b)=>{const n=distance(a,b);let prev=a;for(let i=1;i<=n;i++){const p={x:Math.round(a.x+(b.x-a.x)*i/n),y:Math.round(a.y+(b.y-a.y)*i/n)};if(!board.stepOK(p.x,p.y,prev.x,prev.y)||(i<n&&all.some(z=>z!==m&&z.hp>0&&same(z,p))))return false;prev=p}return true};
- if(m.intent){const intent=m.intent;delete m.intent;m.creatureCD=skill.cd;return {type:'release',hit:distance(m,player)<=skill.range+Number(m.creatureSkill==='burst')&&intent.cells.some(p=>same(p,player))&&ray(m,player),power:skill.power,ranged:skill.ranged,drain:m.creatureSkill==='drain',name:skill.name}}
+ if(m.intent){const intent=m.intent;
+   delete m.intent;
+   m.creatureCD=skill.cd;
+   return {type:'release',hit:distance(m,player)<=skill.range+Number(m.creatureSkill==='burst')&&intent.cells.some(p=>same(p,player))&&ray(m,player),power:skill.power,ranged:skill.ranged,drain:m.creatureSkill==='drain',name:skill.name}}
  if(m.creatureCD>0){m.creatureCD--;return null}
  if(distance(m,player)>skill.range||!ray(m,player))return null;
  const cells=[{x:player.x,y:player.y}];
@@ -2627,7 +2674,9 @@ function buildMerchant(d,decorated,terrain,loot,all,floor,W,H){
 }
 /* TECH-012C — Le commerce exige un marchand adjacent et accessible, ainsi qu'une zone sans ennemi vivant à six cases ou moins. */
 function merchantAvailable(f){
- return mode==='game'&&S&&!S.dead&&f?.type==='merchant'&&Object.hasOwn(MERCHANTS,f.merchantId)&&features.includes(f)&&dist(f,S)===1&&stepOK(f.x,f.y,S.x,S.y)&&!mob(f.x,f.y)&&!monsters.some(m=>m.hp>0&&dist(m,S)<=6);
+ return mode==='game'&&S&&!S.dead&&f?.type==='merchant'&&Object.hasOwn(MERCHANTS,f.merchantId)
+   &&features.includes(f)&&dist(f,S)===1&&stepOK(f.x,f.y,S.x,S.y)
+   &&!mob(f.x,f.y)&&!monsters.some(m=>m.hp>0&&dist(m,S)<=6);
 }
 /* TECH-012C — Contrôle le stock, le prix, l'or et la capacité de rangement avant toute transaction. */
 function canBuy(f,index){
@@ -2871,7 +2920,13 @@ function buildDungeon(W,H,floor,seed){
   /* TECH-012C — Détermine le rôle, les PV et l'attaque de base de l'ennemi selon la profondeur et le tirage. */
   const spawn=(pos,elite)=>{
     const roll=rand(100),role=elite?'guardian':roll<24?'brute':roll<49||floor===1?'wanderer':roll<69?'archer':roll<82?'ambusher':floor<3?'wanderer':roll<91?'coward':'tracker';
-    const types={guardian:['Gardien','#e6ad65',16+floor*2,5],brute:['Brute','#c87961',8+floor,3],wanderer:['Errant','#bd777d',4+Math.floor(floor/2),2],archer:['Archer','#91ab6e',4+Math.floor(floor/2),2],ambusher:['Guetteur','#9282bb',5+Math.floor(floor/2),2],coward:['Fuyard','#c0b58a',5+Math.floor(floor/2),2],tracker:['Traqueur','#75b0b7',6+Math.floor(floor/2),2]};
+    const types={guardian:['Gardien','#e6ad65',16+floor*2,5],
+      brute:['Brute','#c87961',8+floor,3],
+      wanderer:['Errant','#bd777d',4+Math.floor(floor/2),2],
+      archer:['Archer','#91ab6e',4+Math.floor(floor/2),2],
+      ambusher:['Guetteur','#9282bb',5+Math.floor(floor/2),2],
+      coward:['Fuyard','#c0b58a',5+Math.floor(floor/2),2],
+      tracker:['Traqueur','#75b0b7',6+Math.floor(floor/2),2]};
     const [kind,color,hp,atk]=types[role];
     monsters.push({...pos,hp,maxHp:hp,atk,kind,elite,color,role});
   };
@@ -3917,7 +3972,8 @@ function combatFx(kind,amount){
 function update(){
   if(!S)return;
   updateHud();
-  document.getElementById('biomeName').textContent=currentBiome().name;stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;
+  document.getElementById('biomeName').textContent=currentBiome().name;
+    stats.textContent=`${CLASSES[S.classId].name} N${S.level} · PV ${S.hp}/${S.maxHp} · ${CLASSES[S.classId].res} ${S.res}/${S.maxRes} · Étage ${S.floor} · T${S.turn}`;
   const weaponButton=document.getElementById('weaponAction'),w=currentWeapon();
   weaponButton.textContent=w.range>1?w.name+' · '+w.range+' c.':'Arme · contact';
   weaponButton.disabled=mode!=='game'||w.range<=1||S.res<w.cost;
@@ -3925,7 +3981,8 @@ function update(){
   document.getElementById('consumables').textContent='Objets ('+Object.keys(CONSUMABLES).reduce((n,k)=>n+pouchCount(k),0)+')';
   document.getElementById('bandage').textContent='Bandage ('+S.bandages+')';
   document.querySelectorAll('[data-skill]').forEach(b=>{
-    let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];setHudMarkup(b,skillIcon(S.classId,i)+'<span class="skill-caption">'+s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]+' t':'')+'</span><small class="skill-cost">Coût '+s[1]+'</small>');
+    let i=S.bar[+b.dataset.skill],s=CLASSES[S.classId].skills[i];
+      setHudMarkup(b,skillIcon(S.classId,i)+'<span class="skill-caption">'+s[0]+(s[3]==='heal'?' ('+healingLeft()+')':'')+(S.cool[i]?' · '+S.cool[i]+' t':'')+'</span><small class="skill-cost">Coût '+s[1]+'</small>');
     b.disabled=mode!=='game'||S.cool[i]>0||S.res<s[1]||(s[3]==='heal'&&!healingLeft());
     b.classList.toggle('active',selected===i)
   });
@@ -4205,7 +4262,8 @@ function inventory(){
   const names={warrior:['Force brute','Fureur','Armure renforcée','Réflexes','Maître d’armes'],rogue:['Lame affûtée','Précision mortelle','Souplesse','Pas furtif','Maître des ombres'],ranger:['Flèche lourde','Œil de lynx','Peau dure','Instinct','Maître pisteur'],mage:['Puissance arcanique','Surcharge','Peau de pierre','Voile','Maître des arcanes']}[S.classId];
   const nodes=[['o1',2,[], '+1 dégât'],['o2',5,['o1'],'+8% critique'],['d1',2,[],'+1 défense'],['d2',5,['d1'],'+5% esquive'],['master',10,['o2','d2'],'+2 dégâts, +1 régénération']];
   /* TECH-012C — Vérifie les conditions d'achat d'un talent passif de base. */
-  const eligible=n=>S.points>0&&!S.nodes[n[0]]&&S.level>=n[1]&&n[2].every(k=>S.nodes[k]);tree.innerHTML='<h2>Arbre de talents passifs</h2><p>Chaque talent coûte 1 point. Maîtrise : les deux branches avancées requises.</p><div class="classes">'+nodes.map((n,i)=>'<button data-node="'+i+'" '+(eligible(n)?'':'disabled')+'>'+names[i]+'<small>'+n[3]+' · Niv. '+n[1]+(S.nodes[n[0]]?' · acquis':n[2].length?' · prérequis : '+n[2].map(k=>names[nodes.findIndex(x=>x[0]===k)]).join(', '):'')+'</small></button>').join('')+'</div>';
+  const eligible=n=>S.points>0&&!S.nodes[n[0]]&&S.level>=n[1]&&n[2].every(k=>S.nodes[k]);
+    tree.innerHTML='<h2>Arbre de talents passifs</h2><p>Chaque talent coûte 1 point. Maîtrise : les deux branches avancées requises.</p><div class="classes">'+nodes.map((n,i)=>'<button data-node="'+i+'" '+(eligible(n)?'':'disabled')+'>'+names[i]+'<small>'+n[3]+' · Niv. '+n[1]+(S.nodes[n[0]]?' · acquis':n[2].length?' · prérequis : '+n[2].map(k=>names[nodes.findIndex(x=>x[0]===k)]).join(', '):'')+'</small></button>').join('')+'</div>';
   panel.querySelector('[data-rank]').before(tree);
   const advanced=advancedTalentUI(refresh);
   tree.after(advanced);
@@ -4216,13 +4274,23 @@ function inventory(){
   tree.before(active);
   active.querySelectorAll('[data-learn]').forEach(b=>b.onclick=()=>{let i=+b.dataset.learn;if(canLearn(i)){S.points--;S.activeTalents[i]=true;refresh()}});
   /* TECH-012C — Si une compétence figure déjà dans la barre rapide, échange les deux emplacements plutôt que créer un doublon. */
-  active.querySelectorAll('[data-bar]').forEach(b=>b.onchange=()=>{let j=+b.dataset.bar,i=+b.value;if(!unlocked(i))return;let other=S.bar.indexOf(i);if(other>=0)S.bar[other]=S.bar[j];S.bar[j]=i;refresh()});
+  active.querySelectorAll('[data-bar]').forEach(b=>b.onchange=()=>{let j=+b.dataset.bar,i=+b.value;
+    if(!unlocked(i))return;
+    let other=S.bar.indexOf(i);
+    if(other>=0)S.bar[other]=S.bar[j];
+    S.bar[j]=i;
+    refresh()});
   tree.querySelectorAll('[data-node]').forEach(b=>b.onclick=()=>{let n=nodes[+b.dataset.node];if(eligible(n)){S.points--;S.nodes[n[0]]=true;refresh()}});
   panel.querySelectorAll('[data-spec]').forEach(b=>b.onclick=()=>{if(S.level>=5&&!S.spec&&confirm('Choisir définitivement cette spécialisation ?')){S.spec=b.dataset.spec;refresh()}});
   panel.querySelectorAll('[data-attr]').forEach(b=>b.onclick=()=>{if(!S.ap)return;let i=+b.dataset.attr;S.ap--;S.attrs[i]++;if(i===2){S.maxHp+=2;S.hp+=2}if(i===3){S.maxRes++;S.res++}refresh()});
   panel.querySelectorAll('[data-rank]').forEach(b=>b.onclick=()=>{let i=+b.dataset.rank;if(!unlocked(i)||!S.points||S.ranks[i]>=5||S.level<S.ranks[i]*2)return;S.points--;S.ranks[i]++;refresh()});
   /* TECH-012C — Équipe l'objet sélectionné et replace l'ancien équipement dans le sac si nécessaire. */
-  panel.querySelectorAll('[data-equip]').forEach(b=>b.onclick=()=>{let i=S.bag.findIndex(it=>it.id===+b.dataset.equip);if(i<0)return;let it=S.bag.splice(i,1)[0];if(S.equip[it.slot])S.bag.push(S.equip[it.slot]);S.equip[it.slot]=it;refresh()});
+  panel.querySelectorAll('[data-equip]').forEach(b=>b.onclick=()=>{let i=S.bag.findIndex(it=>it.id===+b.dataset.equip);
+    if(i<0)return;
+    let it=S.bag.splice(i,1)[0];
+    if(S.equip[it.slot])S.bag.push(S.equip[it.slot]);
+    S.equip[it.slot]=it;
+    refresh()});
   panel.querySelectorAll('[data-off]').forEach(b=>b.onclick=()=>{let k=b.dataset.off;if(S.equip[k]&&S.bag.length<24){S.bag.push(S.equip[k]);S.equip[k]=null;refresh()}});
   panel.querySelectorAll('[data-drop]').forEach(b=>b.onclick=()=>{if(confirm('Jeter cet objet ?')){S.bag=S.bag.filter(it=>it.id!==+b.dataset.drop);refresh()}});
   document.getElementById('jump-equipment').onclick=()=>document.getElementById('equipment-heading').scrollIntoView({block:'start'});
