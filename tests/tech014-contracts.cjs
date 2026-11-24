@@ -8,8 +8,9 @@ const {execFileSync}=require('node:child_process');
 const {BASE,CLASSES_IDS,rng32}=require('../tools/godot/reference.cjs');
 const {generator,geometry,combat,dist,doctrineBonus,diminishingChance}=require('../tools/godot/simulation-contract.cjs');
 const root=path.resolve(__dirname,'..');
-const source=name=>execFileSync('git',['show',BASE+':src/game/'+name+'.js'],{cwd:root,encoding:'utf8'});
-const load=(name,api,context={})=>vm.runInNewContext(source(name)+'\n;('+api+')',context,{timeout:1000});
+const sources=new Map(),scripts=new Map();
+function source(name){if(!sources.has(name))sources.set(name,execFileSync('git',['show',BASE+':src/game/'+name+'.js'],{cwd:root,encoding:'utf8'}));return sources.get(name)}
+function load(name,api,context={}){const key=name+'|'+api;if(!scripts.has(key))scripts.set(key,new vm.Script(source(name)+'\n;('+api+')'));return scripts.get(key).runInNewContext(context,{timeout:1000})}
 const seeds=[0,1,1234567,0xffffffff],rngVectors=[];
 const dungeon=load('dungeon','buildDungeon');
 // Extraire exclusivement la petite fonction historique de tirage local.
