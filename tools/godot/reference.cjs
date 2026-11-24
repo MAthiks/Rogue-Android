@@ -26,18 +26,32 @@ const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('h
 function createSession(html,seed){
   const rng=rng32(seed),math=Object.create(Math);math.random=()=>rng.next();
   const nodes=new Map(),storage=new Map(),ctx={fillRect(){},strokeRect(){}};
+  // Les boutons générés par inventory() sont réellement câblés par le moteur.
+  const controls=new Map();
+  function section(id){
+    const el={id,innerHTML:'',before(){},after(){},querySelector(){return section('placeholder')},
+      querySelectorAll(selector){
+        const m=/^\[data-([a-z-]+)\]$/.exec(selector);if(!m)return [];
+        const attr=m[1],re=new RegExp('data-'+attr+'="([^"]*)"','g');
+        return [...el.innerHTML.matchAll(re)].map(match=>{
+          const node={dataset:{[attr]:match[1]},value:'',onclick:null,onchange:null};
+          controls.set(attr+':'+match[1],node);return node;
+        });
+      }};
+    return el;
+  }
   function element(id){
     if(!nodes.has(id)){
       const classes=new Set();
-      nodes.set(id,{id,innerHTML:'',textContent:'',style:{setProperty(){}},
+      nodes.set(id,{...section(id),id,textContent:'',style:{setProperty(){}},
         classList:{add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v),
           toggle(v,on){if(on===undefined)on=!classes.has(v);if(on)classes.add(v);else classes.delete(v);return on}},
         getContext:()=>ctx,parentElement:{clientWidth:480,clientHeight:500},width:640,height:384,
-        querySelectorAll:()=>[],addEventListener(){}});
+        addEventListener(){}});
     }
     return nodes.get(id);
   }
-  const document={getElementById:element,querySelectorAll:()=>[],documentElement:element('html'),addEventListener(){}};
+  const document={getElementById:element,createElement:()=>section('section'),querySelectorAll:()=>[],documentElement:element('html'),addEventListener(){}};
   const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,String(v)),removeItem:k=>storage.delete(k)};
   const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
   const source=scripts[0]?.[1];
@@ -45,16 +59,38 @@ function createSession(html,seed){
   if(!source||source.split(marker).length!==2)throw Error('Contrat de démarrage du moteur modifié');
   // L'instrumentation se fait uniquement en mémoire. Ne jamais écrire ce script dans index.html.
   const hook=source.slice(0,source.indexOf(marker))+ 
-    'return {newGame,move,activate,bandage,finish,hide,los,stepOK,canUseConsumable,useConsumable,healingLeft,save,restore,readHistory,buildDungeon,'+
+    'return {newGame,move,activate,bandage,finish,hide,los,stepOK,canUseConsumable,useConsumable,healingLeft,save,restore,readHistory,buildDungeon,inventory,aimWeapon,searchNearby,canBuy,buyMerchant,canSell,sellMerchant,'+
     'eventChoiceAllowed,resolveEvent,specialRoomAllowed,resolveSpecialRoom,EXPLORATION_EVENTS,SPECIAL_ROOMS,'+
-    'resume:()=>{mode="game";hide()},state:()=>({S,map,seen,monsters,loot,stairs,features,terrain,selected,mode,messages,overlayOpen:!overlay.classList.contains("hidden")}),'+
+    'cancelTarget:()=>{selected=null},resume:()=>{mode="game";hide()},state:()=>({S,map,seen,monsters,loot,stairs,features,terrain,selected,mode,messages,overlayOpen:!overlay.classList.contains("hidden")}),'+
     'catalogs:()=>({CLASSES,ATTR,BASE,GEAR_SLOTS,RARITIES,GEAR_BASES,WEAPONS,WEAPON_BASE_IDS,STYLES,ADV_TALENTS,SYNERGIES,CONSUMABLES,POUCH_CAP,EXPLORATION_EVENTS,RARE_ENCOUNTERS,DOCTRINES,BALANCE,GEAR_SETS,UNIQUES,BESTIARY,CREATURE_POWERS,EXTENDED_BOSSES,MERCHANTS,GOLD_CAP,SPECIAL_ROOMS,BIOMES,AI_FAMILY,BOSS_PHASE_PATTERN,'+
     'AFFIXES:AFFIXES.map(({value,...meta})=>({...meta,valuesByGrade:[1,2,3,4].map(g=>value(g))}))})};})();';
-  const engine=vm.runInNewContext(hook,{document,localStorage,window:{},innerHeight:800,ResizeObserver:undefined,Math:math},{timeout:5000});
+  const engine=vm.runInNewContext(hook,{document,localStorage,window:{},innerHeight:800,ResizeObserver:undefined,Math:math,confirm:()=>true},{timeout:5000});
   const snapshot=()=>clone(engine.state());
   function action(command){
     const {type}=command;
-    if(type==='move'){
+    if(type==='inventory'){
+      // Exécute le callback réel de l'interface historique, sans modifier S.
+      if(engine.state().mode!=='game'||engine.state().overlayOpen)throw Error('Inventaire indisponible');
+      const allowed=['equip','off','drop','spec','attr','rank','node','learn','bar','style','advanced','synergy'];
+      if(!allowed.includes(command.kind))throw Error('Transaction inconnue');
+      controls.clear();engine.inventory();
+      const node=controls.get(command.kind+':'+command.id);
+      if(node){if(command.kind==='bar'){node.value=String(command.value);node.onchange?.()}else node.onclick?.()}
+      engine.hide();
+    }else if(type==='wait'){
+      if(engine.state().mode==='game'&&!engine.state().overlayOpen){
+        engine.cancelTarget();engine.searchNearby();engine.finish();
+      }
+    }else if(type==='close'){if(engine.state().mode==='game')engine.hide()}
+    else if(type==='weapon')engine.aimWeapon();
+    else if(type==='consume'){
+      if(!Object.hasOwn(engine.catalogs().CONSUMABLES,command.id))throw Error('Consommable inconnu');
+      engine.useConsumable(command.id);
+    }else if(type==='buy'||type==='sell'){
+      const f=engine.state().features.find(v=>v.x===command.x&&v.y===command.y&&v.type==='merchant');
+      if(!f||!engine.state().overlayOpen)throw Error('Commerce indisponible');
+      (type==='buy'?engine.buyMerchant:engine.sellMerchant)(f,command.id);
+    }else if(type==='move'){
       const {dx,dy}=command;
       if(!Number.isInteger(dx)||!Number.isInteger(dy)||Math.abs(dx)>1||Math.abs(dy)>1||(!dx&&!dy))throw Error('Direction invalide');
       engine.move(dx,dy);
