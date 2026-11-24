@@ -378,6 +378,27 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       assert.ok(await page.locator('#game').evaluate(c=>{const r=c.getBoundingClientRect();return r.width>0&&r.height>0}));
       if(process.env.ROGUE_ART_PREVIEW)await page.screenshot({path:'art-preview/interface-'+width+'x'+height+'.png'});
     }
+    // GAME-009E: all pad sizes, readable HUD and no mutation during display changes.
+    const displaySave=await read();
+    assert.equal(await page.locator('#hudClass .class-icon').count(),1);
+    assert.equal(await page.locator('[data-skill] .skill-cost').count(),3);
+    assert.ok((await page.locator('[data-skill] .skill-cost').allTextContents()).every(s=>/^Coût [0-9]+$/.test(s)));
+    assert.equal(await page.locator('#log').getAttribute('aria-label'),'Journal de combat');
+    for(const [width,height] of [[393,851],[320,640],[851,393]]){
+      await page.setViewportSize({width,height});
+      for(const pad of [85,100,115]){
+        await page.locator('#menu').tap();await page.locator('#pauseopts').tap();
+        await page.locator('#padsize').selectOption(String(pad));
+        await page.locator('#optback').tap();await page.locator('#back').tap();
+        await page.locator('#game').evaluate(c=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        assert.equal(await page.locator('[data-d]').count(),8);
+        assert.ok(await page.locator('#pad button,.skills button,.tools button').evaluateAll(a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=25&&r.height>=25&&r.x>=-1&&r.y>=-1&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})), 'touch geometry '+width+'x'+height+' pad '+pad);
+        assert.ok(await page.locator('main').evaluate(e=>e.clientHeight>=100),'play area remains visible');
+        assert.deepEqual(await read(),displaySave);
+        if(process.env.ROGUE_ART_PREVIEW&&pad===100)await page.screenshot({path:'art-preview/dungeon-hud-'+width+'x'+height+'.png'});
+      }
+    }
+    await page.locator('#menu').tap();await page.locator('#pauseopts').tap();await page.locator('#padsize').selectOption('100');await page.locator('#optback').tap();await page.locator('#back').tap();
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});

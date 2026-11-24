@@ -43,6 +43,8 @@ jobs:
         run: node tests/game009c.cjs
       - name: Verify equipment and bag presentation
         run: node tests/game009d.cjs
+      - name: Verify dungeon HUD and journal
+        run: node tests/game009e.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
