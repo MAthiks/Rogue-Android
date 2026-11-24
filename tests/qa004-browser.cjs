@@ -400,6 +400,25 @@ const key='rogue-android-game002-v1',pref='rogue-android-display-v1';
       }
     }
     await page.locator('#menu').tap();await page.locator('#pauseopts').tap();await page.locator('#padsize').selectOption('100');await page.locator('#optback').tap();await page.locator('#back').tap();
+    // GAME-011C4: eight actual touch directions, one action per press, unchanged HUD nodes.
+    const padFixture=await read();padFixture.S.x=24;padFixture.S.y=16;
+    padFixture.S.hp=padFixture.S.maxHp;padFixture.S.res=padFixture.S.maxRes;
+    padFixture.S.cool=[0,0,0,0,0];padFixture.map.fill(0);
+    padFixture.monsters=[];padFixture.features=[];padFixture.terrain=[];padFixture.loot=[];
+    padFixture.stairs={x:46,y:30};
+    await page.addInitScript(({key,data})=>{if(!sessionStorage.getItem('pad-011c4')){localStorage.setItem(key,JSON.stringify(data));sessionStorage.setItem('pad-011c4','1')}},{key,data:padFixture});
+    await page.reload();await page.locator('#resume').tap();
+    await page.evaluate(()=>{window.__hudIdentity=[document.querySelector('#hudClass svg'),document.querySelector('[data-skill] svg')]});
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){
+      const before=await read();
+      await page.locator('[data-d="'+dx+','+dy+'"]').tap();
+      const after=await read();
+      assert.equal(after.S.turn,before.S.turn+1);assert.equal(after.S.x,before.S.x+dx);assert.equal(after.S.y,before.S.y+dy);
+    }
+    const padAfter=await read();assert.equal(padAfter.S.x,24);assert.equal(padAfter.S.y,16);
+    assert.ok(await page.evaluate(()=>window.__hudIdentity[0]===document.querySelector('#hudClass svg')&&window.__hudIdentity[1]===document.querySelector('[data-skill] svg')));
+    await page.locator('#menu').tap();await page.locator('#back').tap();assert.deepEqual(await read(),padAfter);
+    await page.reload();await page.locator('#resume').tap();assert.deepEqual(await read(),padAfter);
     assert.deepEqual(errors,[]);console.log('Chromium mobile: touch, 8 directions, wait, inventory, zoom, reload, landscape and canvas OK');
   }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});

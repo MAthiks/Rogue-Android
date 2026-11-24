@@ -72,6 +72,20 @@ jobs:
           node-version: '22'
       - run: npm install --no-save --no-package-lock playwright@1.56.1
       - run: npx playwright install --with-deps chromium
+      - name: Measure and compare GAME-011C Android-browser performance
+        run: |
+          git fetch --no-tags --depth=1 origin b426bfaed899b6203400283ccd56060baf672dfb
+          git show b426bfaed899b6203400283ccd56060baf672dfb:index.html > /tmp/cryptgrave-baseline.html
+          node tests/game011c-perf.cjs /tmp/cryptgrave-baseline.html perf-results/game011c-baseline.json
+          node tests/game011c-perf.cjs index.html perf-results/game011c-candidate.json
+          node tests/game011c-compare.cjs perf-results/game011c-baseline.json perf-results/game011c-candidate.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cryptgrave-game011c-performance
+          path: perf-results/
+          if-no-files-found: warn
+          retention-days: 30
       - run: node tests/qa004-browser.cjs
         env:
           ROGUE_ART_PREVIEW: '1'
