@@ -51,6 +51,8 @@ jobs:
         run: node tests/game010b.cjs
       - name: Verify tactical coordination and boss patterns
         run: node tests/game010c.cjs
+      - name: Verify expanded exploration and secret chambers
+        run: node tests/game010d.cjs
   chromium-mobile:
     runs-on: ubuntu-24.04
     steps:
